@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
   // const userEmail = req.headers.get('x-user-email');
   const GITHUB_TOKEN = process.env.GITHUB_TOKEN!;
   const GITHUB_USERNAME = process.env.GITHUB_USERNAME!;
-  const VERCEL_TOKEN = process.env.VERCEL_TOKEN!;
+  const VERCEL_TOKEN = process.env.VERCELTOKEN!;
   const GOOGLE_CLIENT_EMAIL = process.env.GOOGLE_CLIENT_EMAIL!;
   const GOOGLE_PRIVATE_KEY = process.env.GOOGLE_PRIVATE_KEY!.replace(/\\n/g, '\n');
 
