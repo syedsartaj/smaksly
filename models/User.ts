@@ -11,6 +11,7 @@ const userSchema = new mongoose.Schema({
       DOMAIN: String,
       git_repo: String,
       vercel_id: String,
+      token: String,
     }
   ],
 });

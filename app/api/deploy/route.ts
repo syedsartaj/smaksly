@@ -11,7 +11,6 @@ import User from '@/models/User';
 export async function POST(req: NextRequest) {
   const { repo, userEmail, domain } = await req.json();
 
-  // const userEmail = req.headers.get('x-user-email');
   const GITHUB_TOKEN = process.env.GITHUB_TOKEN!;
   const GITHUB_USERNAME = process.env.GITHUB_USERNAME!;
   const VERCEL_TOKEN = process.env.VERCELTOKEN!;
@@ -22,13 +21,12 @@ export async function POST(req: NextRequest) {
   const projectName = `vercel-${newRepoName}`;
 
   try {
-    console.log("user email in deploy",userEmail);
+    console.log("user email in deploy", userEmail);
     console.log("🚧 Starting deployment process...");
     const tmp = await dir({ unsafeCleanup: true });
     const git = simpleGit(tmp.path);
     console.log("📁 Temp directory created at:", tmp.path);
 
-    // Clone repo and trigger commit
     await git.clone(repo, ".");
     await git.removeRemote("origin");
     const readmePath = path.join(tmp.path, "README.md");
@@ -36,7 +34,6 @@ export async function POST(req: NextRequest) {
     await git.add(".");
     await git.commit("chore: trigger deploy via update");
 
-    // Create GitHub repo
     const createRes = await fetch(`https://api.github.com/user/repos`, {
       method: "POST",
       headers: {
@@ -50,7 +47,6 @@ export async function POST(req: NextRequest) {
     const newRepoURL = createRepoData.clone_url;
     console.log("✅ GitHub repo created:", newRepoURL);
 
-    // Create Vercel project
     const projectRes = await fetch("https://api.vercel.com/v9/projects", {
       method: "POST",
       headers: {
@@ -70,7 +66,6 @@ export async function POST(req: NextRequest) {
     const project = await projectRes.json() as any;
     if (!project.id) throw new Error("❌ Failed to create Vercel project");
 
-    // Create Google Sheet
     const auth = new google.auth.GoogleAuth({
       credentials: {
         client_email: GOOGLE_CLIENT_EMAIL,
@@ -95,12 +90,31 @@ export async function POST(req: NextRequest) {
     const spreadsheetId = createSheetRes.data.spreadsheetId!;
     console.log("✅ Sheet created with ID:", spreadsheetId);
 
+    // Add Sheet2 using batchUpdate
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: spreadsheetId,
+      requestBody: {
+        requests: [
+          {
+            addSheet: {
+              properties: {
+                title: 'Sheet2',
+                index: 1, // Place Sheet2 as the second sheet
+              },
+            },
+          },
+        ],
+      },
+    });
+    console.log("✅ Sheet2 created in the spreadsheet");
+
     await drive.files.update({
       fileId: spreadsheetId,
       addParents: '15DgfharKkrvsLa17OwV3zmUbmF1GuyOd',
       fields: 'id, parents',
     });
 
+    // Set Sheet1 header and initialize id column with formula
     await sheets.spreadsheets.values.update({
       spreadsheetId: spreadsheetId,
       range: 'Sheet1!A1:S1',
@@ -116,7 +130,26 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Add ENV vars to Vercel
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: spreadsheetId,
+      range: 'Sheet2!A1:Q2',
+      valueInputOption: 'RAW',
+      requestBody: {
+        values: [
+          [
+            'Header', 'Hero', 'Heading', 'Subheading', 'ButtonText',
+            'Footer', 'companyName', 'companySlogan', 'layoutType',
+            'primaryColor', 'secondaryColor', 'fontFamily', 'bloglayout','body_aboutus','body_contactus','body_privacy_policy','body_services'
+          ],
+          [
+            2, 4, 'Unleash Your Potentials', 'Innovative marketing strategies for the digital age.',
+            'Start Your Journeys', 2, 'BrandBoost', 'Your partner in digital success.',
+            2, '#2563eb', '#e5e7eb', 'Inter, sans-serif', 2,'','','',''
+          ]
+        ],
+      },
+    });
+
     const finalEnvVars = [
       { key: "SPREADSHEET_ID", value: spreadsheetId },
       { key: "GOOGLE_CLIENT_EMAIL", value: GOOGLE_CLIENT_EMAIL },
@@ -141,12 +174,10 @@ export async function POST(req: NextRequest) {
       console.log(`📄 ENV var added: ${env.key}`);
     }
 
-    // Push to GitHub
     await git.addRemote("origin", `https://${GITHUB_TOKEN}@github.com/${GITHUB_USERNAME}/${newRepoName}.git`);
     await git.push("origin", "main");
     console.log("🚀 Code pushed to GitHub and Vercel will auto-deploy");
 
-    // Save to MongoDB
     if (userEmail) {
       await connectDB();
       await User.updateOne(
@@ -167,7 +198,6 @@ export async function POST(req: NextRequest) {
       console.log(`✅ Deployment stored for ${userEmail}`);
     }
 
-    // Optionally map domain
     if (domain) {
       await fetch(`https://api.vercel.com/v10/projects/${projectName}/domains`, {
         method: "POST",

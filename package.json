@@ -9,6 +9,8 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@headlessui/react": "^2.2.4",
+    "adm-zip": "^0.5.16",
     "bcryptjs": "^3.0.2",
     "googleapis": "^150.0.1",
     "mongoose": "^8.16.1",
@@ -16,11 +18,14 @@
     "node-fetch": "^3.3.2",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-slick": "^0.30.3",
     "simple-git": "^3.28.0",
+    "slick-carousel": "^1.8.1",
     "tmp-promise": "^3.0.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/adm-zip": "^0.5.7",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
