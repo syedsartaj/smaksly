@@ -117,7 +117,7 @@ export async function POST(req: NextRequest) {
     // Set Sheet1 header and initialize id column with formula
     await sheets.spreadsheets.values.update({
       spreadsheetId: spreadsheetId,
-      range: 'Sheet1!A1:S1',
+      range: 'Sheet1!A1:T1',
       valueInputOption: 'RAW',
       requestBody: {
         values: [[
@@ -125,7 +125,7 @@ export async function POST(req: NextRequest) {
           'robottxt_headline', 'robottxt_url', 'robottxt_auther_name',
           'robottxt_auther_url', 'robottxt_image_url', 'robottxt_image_width',
           'robottxt_image_height', 'robottxt_publish_date', 'robottxt_modify_date',
-          'robottxt_publisher_logo', 'robottxt_publisher_keyword', 'category', 'body'
+          'robottxt_publisher_logo', 'robottxt_publisher_keyword', 'category', 'body','slug',
         ]],
       },
     });

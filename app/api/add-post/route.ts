@@ -6,6 +6,7 @@ export async function POST(req: NextRequest) {
 
   const {
     spreadsheetId,
+    slug,
     link, code_template, title, image_url,
     robottxt_headline, robottxt_url, robottxt_auther_name,
     robottxt_auther_url, robottxt_image_url, robottxt_image_width,
@@ -42,7 +43,7 @@ export async function POST(req: NextRequest) {
       robottxt_headline, robottxt_url, robottxt_auther_name,
       robottxt_auther_url, robottxt_image_url, robottxt_image_width,
       robottxt_image_height, robottxt_publish_date, robottxt_modify_date,
-      robottxt_publisher_logo, robottxt_publisher_keyword, category, postBody
+      robottxt_publisher_logo, robottxt_publisher_keyword, category, postBody,slug,
     ]];
 
     await sheets.spreadsheets.values.append({

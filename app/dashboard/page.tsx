@@ -141,6 +141,17 @@ export default function DashboardPage() {
         <Header />
         <main className="flex-1 p-6 overflow-y-auto bg-[#1f1d1d] text-white">
           <h2 className="text-xl font-semibold mb-4">Your Deployments</h2>
+          <button
+  onClick={async () => {
+    const res = await fetch('/api/fetch-low-analytics');
+    const json = await res.json();
+    alert(json.message || json.error);
+  }}
+  className="bg-yellow-500 text-black px-3 py-1 rounded hover:bg-yellow-600"
+>
+  📤 Fetch All Analytics
+</button>
+
           <ul className="space-y-3">
             {deployments.map((item: any, idx) => (
               <li key={idx} className="bg-[#403f3f] border-[0.1px] border-[#6e6e6e] p-3 rounded flex justify-between items-center">
@@ -155,6 +166,7 @@ export default function DashboardPage() {
                   <button onClick={() => router.push(`/edit-blog?spreadsheetId=${item.SPREADSHEET_ID}`)} className="px-2 py-1 rounded hover:bg-[#2A2B2D]">📝</button>
                   <button onClick={() => handleDelete(item)} className="bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700">Delete</button>
                   <button onClick={() => openDomainModal(item)} className="bg-green-600 text-white px-3 py-1 rounded">Add Domain</button>
+                  <button onClick={() => router.push(`/analytics?domain=${encodeURIComponent(item.DOMAIN)}`)}className="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700">📊 View Analytics</button>
                 </div>
               </li>
             ))}
@@ -162,27 +174,48 @@ export default function DashboardPage() {
         </main>
       </div>
 
-      {showModal && (
-        <div className="fixed top-0 left-0 w-full h-full bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded max-w-md text-black">
-            <h3 className="text-lg font-bold mb-2">Add Your Custom Domain</h3>
-            <input
-              className="w-full border px-2 py-1 rounded mb-2"
-              placeholder="Enter your domain (e.g., example.com)"
-              value={domainInput}
-              onChange={(e) => setDomainInput(e.target.value)}
-            />
-            <p className="mb-2">Add this DNS TXT record in your domain settings:</p>
-            <pre className="bg-gray-100 p-2 rounded">Name: _vercel-smaksly</pre>
-            <pre className="bg-gray-100 p-2 rounded">Type: TXT</pre>
-            <pre className="bg-gray-100 p-2 rounded">Value: {token}</pre>
-            <div className="flex justify-between mt-4">
-              <button onClick={() => setShowModal(false)} className="bg-gray-800 text-white px-3 py-1 rounded">Close</button>
-              <button onClick={handleDomainVerification} className="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700">Update</button>
-            </div>
-          </div>
-        </div>
-      )}
+{showModal && (
+  <div className="fixed top-0 left-0 w-full h-full bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="bg-white p-6 rounded max-w-md text-black">
+      <h3 className="text-lg font-bold mb-2">Add Your Custom Domain</h3>
+      
+      <input
+        className="w-full border px-2 py-1 rounded mb-2"
+        placeholder="Enter your domain (e.g., example.com)"
+        value={domainInput}
+        onChange={(e) => setDomainInput(e.target.value)}
+      />
+
+      <p className="mb-2 font-semibold">📌 DNS TXT Record (for Vercel Verification)</p>
+      <pre className="bg-gray-100 p-2 rounded">Name: _vercel-smaksly</pre>
+      <pre className="bg-gray-100 p-2 rounded">Type: TXT</pre>
+      <pre className="bg-gray-100 p-2 rounded">Value: {token}</pre>
+
+      <hr className="my-4" />
+
+      <p className="mb-2 font-semibold">🔎 Google Search Console Setup (Optional but Recommended)</p>
+      <p className="text-sm mb-2">
+        To enable search analytics and indexing tracking, please add our service account as a verified user in your Google Search Console property.
+      </p>
+      <ul className="text-sm list-disc list-inside mb-2 space-y-1">
+        <li>Go to <a href="https://search.google.com/search-console/users" className="text-blue-600 underline" target="_blank">Search Console Users & Permissions</a></li>
+        <li>Select your domain property</li>
+        <li>Click "Add User" ➕</li>
+        <li>Email: <code className="bg-gray-200 px-1 rounded">sartaj@school-3e831.iam.gserviceaccount.com</code></li>
+        <li>Permission: <strong>Full</strong> access</li>
+      </ul>
+
+      <p className="text-xs text-gray-500">
+        Once added, we will automatically fetch your domain analytics via Search Console API.
+      </p>
+
+      <div className="flex justify-between mt-4">
+        <button onClick={() => setShowModal(false)} className="bg-gray-800 text-white px-3 py-1 rounded">Close</button>
+        <button onClick={handleDomainVerification} className="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700">Update</button>
+      </div>
+    </div>
+  </div>
+)}
     </div>
   );
 }
