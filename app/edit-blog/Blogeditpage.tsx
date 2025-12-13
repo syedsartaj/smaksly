@@ -1,144 +1,169 @@
 'use client';
 
 import { useSearchParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
-import { Dialog, Transition } from '@headlessui/react'; // For modal
-import { Fragment } from 'react';
+import { useEffect, useState, Fragment } from 'react';
+import { Dialog, Transition } from '@headlessui/react';
+
+function getCurrentISTDateTime() {
+  const date = new Date();
+  const istOffset = 330 * 60 * 1000;
+  const istTime = new Date(date.getTime() + istOffset);
+  return istTime.toISOString().slice(0, 16).replace('T', ' ');
+}
+
+function generateSlug(title: string) {
+  return title
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .replace(/-+/g, '-');
+}
 
 export default function EditBlog() {
   const searchParams = useSearchParams();
-  const spreadsheetId = searchParams.get('spreadsheetId');
+  const domain = searchParams.get('smaksly_id'); // Previously 'smaksly_id'
 
-  const [blogs, setBlogs] = useState([]); // State for all blogs
-  const [selectedBlog, setSelectedBlog] = useState(null); // State for selected blog
-  const [isModalOpen, setIsModalOpen] = useState(false); // State for modal
+  const [blogs, setBlogs] = useState<any[]>([]);
   const [formData, setFormData] = useState({
     id: '',
     title: '',
-    robottxt_headline: '',
-    robottxt_publish_date: '',
-    robottxt_auther_name: '',
     image_url: '',
+    robottxt_publish_date: '',
+    robottxt_modify_date: '',
+    category: '',
+    body: '',
+    slug: '',
   });
 
-  // Fetch all blogs
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
   useEffect(() => {
-    const fetchAllBlogs = async () => {
+    const fetchBlogs = async () => {
+      if (!domain) return console.log("domain not found");
+
       try {
-        const res = await fetch(`/api/read-sheet${spreadsheetId ? `?spreadsheetId=${spreadsheetId}` : ''}`);
-        if (!res.ok) throw new Error('Failed to fetch blogs');
+        const res = await fetch('/api/fetch-blogs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ domain }),
+        });
         const data = await res.json();
-        // Assuming data.sheet1 contains an array of blog rows
-        setBlogs(data.sheet1 || []);
-        console.log(data.sheet1);
+        setBlogs(data || []);
+        console.log(data);
       } catch (error) {
         console.error('Error fetching blogs:', error);
       }
     };
-    fetchAllBlogs();
-  }, [spreadsheetId]);
+    fetchBlogs();
+  }, [domain]);
 
-  const handleDelete = async (id: string) => {
-  if (!spreadsheetId) {
-    alert('❌ Error: Spreadsheet ID is missing');
-    return;
-  }
-
-  const confirm = window.confirm('Are you sure you want to delete this blog?');
-  if (!confirm) return;
-
-  try {
-    const res = await fetch('/api/delete-sheet', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        spreadsheetId,
-        id,
-      }),
-    });
-
-    if (res.ok) {
-      alert('✅ Blog deleted successfully!');
-      setBlogs((prev: any) => prev.filter((blog: any) => blog.id !== id));
-    } else {
-      const errorData = await res.json();
-      alert(`❌ Error: ${errorData.error}`);
-    }
-  } catch (error) {
-    console.error('Error deleting blog:', error);
-    alert('❌ Delete failed');
-  }
-};
-
-  // Handle opening the modal and setting form data
-  const handleEditClick = (blog :any) => {
-    setSelectedBlog(blog);
+  const handleEditClick = (blog: any) => {
     setFormData({
       id: blog.id || '',
       title: blog.title || '',
-      robottxt_headline: blog.robottxt_headline || '',
-      robottxt_publish_date: blog.robottxt_publish_date || '',
-      robottxt_auther_name: blog.robottxt_auther_name || '',
       image_url: blog.image_url || '',
+      robottxt_publish_date: blog.publish_date || '',
+      robottxt_modify_date: getCurrentISTDateTime(),
+      category: blog.category || '',
+      body: blog.body || '',
+      slug: blog.slug || '',
     });
     setIsModalOpen(true);
   };
 
-  // Handle form input changes
-  const handleChange = (e:any) => {
+  const handleChange = (e: any) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    setFormData(prev => ({
+      ...prev,
+      [name]: value,
+      ...(name === 'title' && { slug: generateSlug(value) }),
+    }));
   };
 
-  // Handle blog update
   const handleUpdate = async () => {
+    if (!domain || !formData.id) {
+      alert('❌ Error: Missing domain or blog ID');
+      return;
+    }
+
+    const res = await fetch('/api/update-blog', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        domain,
+        id: formData.id,
+        updates: {
+          ...formData,
+          modify_date: getCurrentISTDateTime(),
+        },
+      }),
+    });
+
+    if (res.ok) {
+      alert('✅ Blog updated successfully!');
+      const updatedData = await res.json();
+      setBlogs(prev =>
+        prev.map(blog => blog.id === formData.id ? { ...blog, ...updatedData.updatedBlog } : blog)
+      );
+      setIsModalOpen(false);
+    } else {
+      const errorData = await res.json();
+      alert(`❌ Error: ${errorData.error}`);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!domain) return alert('❌ Domain missing');
+
+    const confirmed = window.confirm('Are you sure you want to delete this blog?');
+    if (!confirmed) return;
+
     try {
-      // Validate required fields
-  if (!spreadsheetId) {
-    alert('❌ Error: Spreadsheet ID is missing');
-    return;
-  }
-  if (!formData.id) {
-    alert('❌ Error: Blog ID is missing');
-    return;
-  }
-  if (!formData.title || !formData.robottxt_headline || !formData.robottxt_publish_date || !formData.robottxt_auther_name || !formData.image_url) {
-    alert('❌ Error: All form fields must be filled');
-    return;
-  }
-      const res = await fetch('/api/update-sheet', {
+      const res = await fetch('/api/delete-blog', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          spreadsheetId,
-          id: formData.id,
-          updates: {
-            title: formData.title,
-            robottxt_headline: formData.robottxt_headline,
-            robottxt_publish_date: formData.robottxt_publish_date,
-            robottxt_auther_name: formData.robottxt_auther_name,
-            image_url: formData.image_url,
-          },
-        }),
+        body: JSON.stringify({ domain, id }),
       });
 
       if (res.ok) {
-        alert('✅ Blog updated successfully!');
-        // Update the blogs list with the updated data
-        const updatedData = await res.json();
-        setBlogs((prev:any) =>
-          prev.map((blog:any) =>
-            blog.id === formData.id ? { ...blog, ...updatedData.updatedRow } : blog
-          )
-        );
-        setIsModalOpen(false); // Close the modal
+        alert('✅ Blog deleted');
+        setBlogs(prev => prev.filter(blog => blog.id !== id));
       } else {
         const errorData = await res.json();
         alert(`❌ Error: ${errorData.error}`);
       }
-    } catch (error) {
-      console.error('Error updating blog:', error);
-      alert('❌ Update failed');
+    } catch (err) {
+      alert('❌ Error deleting blog');
+      console.error(err);
+    }
+  };
+
+  const optimizeWithAI = async () => {
+    try {
+      const res = await fetch('/api/generate-content', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ keyword: formData.title }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'AI optimization failed');
+
+      const cleanBody = (data.body || '').replace(/\*/g, '');
+      const now = getCurrentISTDateTime();
+
+      setFormData(prev => ({
+        ...prev,
+        ...data,
+        body: cleanBody,
+        slug: generateSlug(data.title),
+        robottxt_modify_date: now,
+      }));
+      alert('✅ Optimized with AI');
+    } catch (err) {
+      console.error('AI optimization failed:', err);
+      alert(`❌ Optimization failed: ${err}`);
     }
   };
 
@@ -146,150 +171,66 @@ export default function EditBlog() {
     <div className="p-6 max-w-4xl mx-auto bg-gray-800 text-white rounded-lg shadow-lg">
       <h1 className="text-2xl font-bold mb-4">Manage Blogs</h1>
 
-      {/* Blog List */}
       {blogs.length > 0 ? (
         <div className="space-y-4">
-          {blogs.map((blog : any) => (
-            <div
-              key={blog.id}
-              className="flex justify-between items-center p-4 bg-gray-700 rounded-lg"
-            >
+          {blogs.map((blog: any) => (
+            <div key={blog.id} className="p-4 bg-gray-700 rounded-lg flex justify-between items-center">
               <div>
                 <h2 className="text-lg font-semibold">{blog.title}</h2>
-                <p className="text-sm text-gray-300">{blog.robottxt_headline}</p>
-                <p className="text-sm text-gray-400">By {blog.robottxt_auther_name}</p>
+                <p className="text-sm text-gray-400">Slug: {blog.slug}</p>
+                <p className="text-sm text-gray-400">Category: {blog.category}</p>
               </div>
-              <button
-                onClick={() => handleEditClick(blog)}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded transition-colors duration-200"
-              >
-                Edit
-              </button>
-              <button
-                onClick={() => handleDelete(blog.id)}
-                className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded transition-colors duration-200"
-              >
-                Delete
-              </button>
+              <div className="flex space-x-2">
+                <button onClick={() => handleEditClick(blog)} className="bg-blue-600 px-4 py-2 rounded hover:bg-blue-700">
+                  Edit
+                </button>
+                <button onClick={() => handleDelete(blog.id)} className="bg-red-600 px-4 py-2 rounded hover:bg-red-700">
+                  Delete
+                </button>
+              </div>
             </div>
           ))}
         </div>
       ) : (
-        <p className="text-center">Loading blogs...</p>
+        <p>Loading blogs...</p>
       )}
 
-      {/* Edit Modal */}
+      {/* Modal for Edit Form */}
       <Transition appear show={isModalOpen} as={Fragment}>
         <Dialog as="div" className="relative z-10" onClose={() => setIsModalOpen(false)}>
-          <Transition.Child
-            as={Fragment}
-            enter="ease-out duration-300"
-            enterFrom="opacity-0"
-            enterTo="opacity-100"
-            leave="ease-in duration-200"
-            leaveFrom="opacity-100"
-            leaveTo="opacity-0"
-          >
+          <Transition.Child as={Fragment} enter="ease-out duration-300" enterFrom="opacity-0" enterTo="opacity-100">
             <div className="fixed inset-0 bg-black bg-opacity-50" />
           </Transition.Child>
 
-          <div className="fixed inset-0 overflow-y-auto">
-            <div className="flex min-h-full items-center justify-center p-4 text-center">
-              <Transition.Child
-                as={Fragment}
-                enter="ease-out duration-300"
-                enterFrom="opacity-0 scale-95"
-                enterTo="opacity-100 scale-100"
-                leave="ease-in duration-200"
-                leaveFrom="opacity-100 scale-100"
-                leaveTo="opacity-0 scale-95"
-              >
-                <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-lg bg-gray-800 text-white p-6 align-middle shadow-xl transition-all">
-                  <Dialog.Title as="h3" className="text-lg font-bold mb-4">
-                    Edit Blog - {formData.title}
-                  </Dialog.Title>
-                  <form className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium">ID</label>
-                      <input
-                        type="text"
-                        name="id"
-                        value={formData.id}
-                        onChange={handleChange}
-                        disabled
-                        className="w-full p-2 bg-gray-700 text-white rounded disabled:opacity-50"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium">Title</label>
-                      <input
-                        type="text"
-                        name="title"
-                        value={formData.title}
-                        onChange={handleChange}
-                        className="w-full p-2 bg-gray-700 text-white rounded"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium">Headline</label>
-                      <input
-                        type="text"
-                        name="robottxt_headline"
-                        value={formData.robottxt_headline}
-                        onChange={handleChange}
-                        className="w-full p-2 bg-gray-700 text-white rounded"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium">Publish Date</label>
-                      <input
-                        type="text"
-                        name="robottxt_publish_date"
-                        value={formData.robottxt_publish_date}
-                        onChange={handleChange}
-                        className="w-full p-2 bg-gray-700 text-white rounded"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium">Author</label>
-                      <input
-                        type="text"
-                        name="robottxt_auther_name"
-                        value={formData.robottxt_auther_name}
-                        onChange={handleChange}
-                        className="w-full p-2 bg-gray-700 text-white rounded"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium">Image URL</label>
-                      <input
-                        type="text"
-                        name="image_url"
-                        value={formData.image_url}
-                        onChange={handleChange}
-                        className="w-full p-2 bg-gray-700 text-white rounded"
-                      />
-                    </div>
-                    <div className="flex justify-end space-x-4">
-                      <button
-                        type="button"
-                        onClick={() => setIsModalOpen(false)}
-                        className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded transition-colors duration-200"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleUpdate}
-                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded transition-colors duration-200"
-                      >
-                        Update
-                      </button>
-                    </div>
-                  </form>
-                </Dialog.Panel>
-              </Transition.Child>
-            </div>
+          <div className="fixed inset-0 flex items-center justify-center p-4">
+            <Transition.Child
+              as={Fragment}
+              enter="ease-out duration-300"
+              enterFrom="opacity-0 scale-95"
+              enterTo="opacity-100 scale-100"
+              leave="ease-in duration-200"
+              leaveFrom="opacity-100 scale-100"
+              leaveTo="opacity-0 scale-95"
+            >
+<Dialog.Panel className="bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl text-white max-h-[90vh] overflow-y-auto p-6">
+                <Dialog.Title className="text-xl font-bold mb-4">Edit Blog</Dialog.Title>
+                <form className="space-y-4">
+                  <input disabled value={formData.id} className="w-full p-2 bg-gray-700 rounded" placeholder="ID" />
+                  <input name="title" value={formData.title} onChange={handleChange} className="w-full p-2 bg-gray-700 rounded" placeholder="Title" />
+                  <input name="slug" value={formData.slug} disabled className="w-full p-2 bg-gray-700 rounded opacity-60 cursor-not-allowed" placeholder="Slug" />
+                  <input name="image_url" value={formData.image_url} onChange={handleChange} className="w-full p-2 bg-gray-700 rounded" placeholder="Image URL" />
+                  <input disabled value={formData.robottxt_publish_date} className="w-full p-2 bg-gray-700 rounded" placeholder="Publish Date" />
+                  <input disabled value={formData.robottxt_modify_date} className="w-full p-2 bg-gray-700 rounded" placeholder="Modify Date" />
+                  <input name="category" value={formData.category} onChange={handleChange} className="w-full p-2 bg-gray-700 rounded" placeholder="Category" />
+                  <textarea name="body" value={formData.body} onChange={handleChange} rows={4} className="w-full p-2 bg-gray-700 rounded" placeholder="Body" />
+                  <div className="flex justify-between space-x-2">
+                    <button type="button" onClick={() => setIsModalOpen(false)} className="bg-gray-600 px-4 py-2 rounded">Cancel</button>
+                    <button type="button" onClick={optimizeWithAI} className="bg-yellow-500 px-4 py-2 rounded hover:bg-yellow-600">Optimize With AI</button>
+                    <button type="button" onClick={handleUpdate} className="bg-green-600 px-4 py-2 rounded">Update</button>
+                  </div>
+                </form>
+              </Dialog.Panel>
+            </Transition.Child>
           </div>
         </Dialog>
       </Transition>

@@ -1,70 +1,46 @@
-import { google } from 'googleapis';
 import { NextRequest, NextResponse } from 'next/server';
+import { connectDB } from '@/lib/db';
+import Client from '@/models/Client';
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { key, value, id } = body;
+    const { key, value, id } = await req.json();
 
-    const GOOGLE_CLIENT_EMAIL = process.env.GOOGLE_CLIENT_EMAIL!;
-    const GOOGLE_PRIVATE_KEY = process.env.GOOGLE_PRIVATE_KEY!.replace(/\\n/g, '\n');
-    const SPREADSHEET_ID = id;
+    await connectDB();
 
-    const auth = new google.auth.GoogleAuth({
-      credentials: {
-        client_email: GOOGLE_CLIENT_EMAIL,
-        private_key: GOOGLE_PRIVATE_KEY,
-      },
-      scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-    });
+    // 1. Find the user with the deployment matching the given id
+    const user = await Client.findOne({ 'Deployments.vercel_id': id });
 
-    const client = await auth.getClient() as any;
-    const sheets = google.sheets({ version: 'v4', auth: client });
+    if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
-    // 1. Read the existing row
-    const readRes = await sheets.spreadsheets.values.get({
-      spreadsheetId: SPREADSHEET_ID,
-      range: 'Sheet2!A2:Q2',
-    });
+    // 2. Find the deployment
+    const deploymentIndex = user.Deployments.findIndex((dep: any) => dep.vercel_id === id);
+    if (deploymentIndex === -1) return NextResponse.json({ error: 'Deployment not found' }, { status: 404 });
 
-    let row = readRes.data.values?.[0] || new Array(13).fill('');
-    const columns = [
-      'Header', 'Hero', 'Heading', 'Subheading', 'ButtonText',
-      'Footer', 'companyName', 'companySlogan', 'layoutType',
-      'primaryColor', 'secondaryColor', 'fontFamily', 'bloglayout',
-      'body_aboutus', 'body_contactus', 'body_privacy_policy','body_privacypolicy','body_privacypolicy',
-    ];
+    const deployment = user.Deployments[deploymentIndex];
 
-    // 2. Update based on value type
-    if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-      // Handle multiple key-value pairs (config object)
-      for (const [configKey, configValue] of Object.entries(value)) {
-        const index = columns.indexOf(configKey);
-        if (index !== -1) {
-          row[index] = configValue;
-        } else {
-          console.warn(`Ignoring unknown config key: ${configKey}`);
-        }
-      }
-    } else {
-      // Handle single key-value pair
-      const index = columns.indexOf(key);
-      if (index === -1) throw new Error(`Invalid key: ${key}`);
-      row[index] = value;
+    if (!deployment.Data || deployment.Data.length === 0) {
+      return NextResponse.json({ error: 'No data found in deployment' }, { status: 404 });
     }
 
-    // 3. Update the row in the sheet
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: SPREADSHEET_ID,
-      range: 'Sheet2!A2:Q2',
-      valueInputOption: 'RAW',
-      requestBody: {
-        values: [row],
-      },
-    });
+    const layout = deployment.Data[0].Layout || {};
+
+    // 3. Update layout values
+    if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+      for (const [k, v] of Object.entries(value)) {
+        layout[k] = v;
+      }
+    } else {
+      layout[key] = value;
+    }
+
+    // 4. Save back
+    deployment.Data[0].Layout = layout;
+    await user.save();
+
     return NextResponse.json({ success: true });
   } catch (error: any) {
-    console.error('❌ Error updating sheet config:', error);
+    console.error('❌ MongoDB update error:', error);
     return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 });
   }
 }

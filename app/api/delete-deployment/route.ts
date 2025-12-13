@@ -1,74 +1,49 @@
-// --- route.ts (API) ---
-import { google } from 'googleapis';
 import { NextRequest, NextResponse } from 'next/server';
-import mongoose from 'mongoose';
+import { connectDB } from '@/lib/db';
+import Client from '@/models/Client';
 
-const MONGO_URI = process.env.MONGODB_URI!;
 const GITHUB_USERNAME = process.env.GITHUB_USERNAME!;
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN!;
 const VERCEL_TOKEN = process.env.VERCELTOKEN!;
-const GOOGLE_CLIENT_EMAIL = process.env.GOOGLE_CLIENT_EMAIL!;
-const GOOGLE_PRIVATE_KEY = process.env.GOOGLE_PRIVATE_KEY!.replace(/\\n/g, '\n');
-
-// Connect Mongo
-if (!mongoose.connection.readyState) {
-  mongoose.connect(MONGO_URI);
-}
-
-// Define User Model
-const userSchema = new mongoose.Schema({}, { strict: false });
-const User = mongoose.models.User || mongoose.model('User', userSchema);
 
 export async function DELETE(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { email, vercel_id, git_repo, SPREADSHEET_ID } = body;
-console.log(email,SPREADSHEET_ID,vercel_id,git_repo);
-    if (!email || !vercel_id || !git_repo || !SPREADSHEET_ID) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
-    }
+    const { email, vercel_id, git_repo } = await req.json();
 
-    // Step 1: Delete Vercel project
-    await fetch(`https://api.vercel.com/v9/projects/${vercel_id}`, {
+    if (!email || !vercel_id)
+      return NextResponse.json({ error: 'Missing email or vercel_id' }, { status: 400 });
+
+    // 🔹 Delete Vercel project (vercel_id = project name)
+    const vercelRes = await fetch(`https://api.vercel.com/v9/projects/${vercel_id}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${VERCEL_TOKEN}` },
     });
+    console.log("🧹 Vercel project delete:", vercelRes.status);
 
-    // Step 2: Delete GitHub repo
+    // 🔹 Delete GitHub repo
     const repoName = git_repo.split('/').pop();
-    await fetch(`https://api.github.com/repos/${GITHUB_USERNAME}/${repoName}`, {
+    console.log("Deleting GitHub repo:", repoName);
+    const githubRes = await fetch(`https://api.github.com/repos/${GITHUB_USERNAME}/${repoName}`, {
       method: 'DELETE',
       headers: {
         Authorization: `Bearer ${GITHUB_TOKEN}`,
         Accept: 'application/vnd.github.v3+json',
       },
     });
+    console.log("🪣 GitHub delete:", githubRes);
 
-    // Step 3: Delete Google Sheet
-    const user = await User.findOne({ email });
-    const deployment = user.deployments.find((d: any) => d.SPREADSHEET_ID === SPREADSHEET_ID);
+    // 🔹 Remove from DB
+    await connectDB();
+    console.log(email);
+    const user = await Client.findOne({ email });
+    if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
-    const auth = new google.auth.GoogleAuth({
-      credentials: {
-        client_email: GOOGLE_CLIENT_EMAIL,
-        private_key: GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
-      },
-      scopes: ['https://www.googleapis.com/auth/drive'],
-    });
+    user.Deployments = user.Deployments.filter((dep: any) => dep.vercel_id !== vercel_id);
+    await user.save();
 
-    const authClient = await auth.getClient() as any;
-    const drive = google.drive({ version: 'v3', auth: authClient });
-    await drive.files.delete({ fileId: SPREADSHEET_ID });
-
-    // Step 4: Remove from DB
-    await User.updateOne(
-      { email },
-      { $pull: { deployments: { SPREADSHEET_ID } } }
-    );
-
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, message: 'Deployment fully deleted' });
   } catch (error: any) {
-    console.error('❌ Deletion error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error('❌ Error deleting deployment:', error);
+    return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 });
   }
 }

@@ -5,7 +5,7 @@ import Header from '@/app/components/Header';
 import Sidebar from '@/app/components/Sidebar';
 import { useRouter } from 'next/navigation';
 import { Menu } from '@headlessui/react';
-import { ChevronDown } from 'lucide-react';
+import { MoreVertical } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 
@@ -146,8 +146,6 @@ export default function DashboardPage() {
       <Sidebar />
       <div className="flex-1 flex flex-col">
         <Header />
-        <main className="flex-1 p-6 overflow-y-auto bg-[#1f1d1d] text-white">
-          <h2 className="text-xl font-semibold mb-4">Your Deployments</h2>
           {/* <button
   onClick={async () => {
     const res = await fetch('/api/fetch-low-analytics');
@@ -158,73 +156,74 @@ export default function DashboardPage() {
 >
   📤 Fetch All Analytics
 </button> */}
-<ul className="space-y-4">
-  {deployments.map((item, idx) => (
-    <motion.li
-      key={idx}
-      whileHover={{ scale: 1.02 }}
-      className="bg-[#2c2b2b] border border-[#4e4d4d] p-4 rounded flex justify-between items-center transition-all duration-200 hover:shadow-[0_0_15px_#00BFA5] hover:border-[#00BFA5]"
-    >
-      <div className="flex flex-col">
-        {/* <p className="font-medium text-white">
-          <span className="mr-1">🔁</span> {item.vercel_id}
-        </p> */}
-        {item.Custom_Domain && (
-          <p className="text-gray-300 text-sm">Custom Domain : {item.Custom_Domain}</p>
-        )}
-        {!item.Custom_Domain && item.Domain && (
-          <p className="text-gray-300 text-sm">Domain : {item.Domain}</p>
-        )}
-        {item.category && (
-          <p className="text-gray-400 text-sm">Category : {item.category?.toUpperCase()}</p>
-        )}
-      </div>
+<main className="flex-1 p-6 overflow-y-auto bg-[#1f1d1d] text-white">
+  <h2 className="text-xl font-semibold mb-4">Portfolios</h2>
+
+  {/* Grid layout */}
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+    {deployments.map((item, idx) => (
+      <motion.div
+        key={idx}
+        whileHover={{ scale: 1.02 }}
+        className="bg-[#2c2b2b] border border-[#4e4d4d] p-4 rounded flex flex-col transition-all duration-200 hover:shadow-[0_0_15px_#00BFA5] hover:border-[#00BFA5]"
+      >
+        <div className="flex flex-col mb-3">
+          {item.Custom_Domain && (
+            <p className="text-gray-300 text-sm">Custom Domain: {item.Custom_Domain}</p>
+          )}
+          {!item.Custom_Domain && item.Domain && (
+            <p className="text-gray-300 text-sm">Domain: {item.Domain}</p>
+          )}
+          {item.category && (
+            <p className="text-gray-400 text-sm">Category: {item.category?.toUpperCase()}</p>
+          )}
+        </div>
+
+        {/* First Look / Website Preview */}
+{/* First Look / Website Preview */}
+{(item.Domain || item.Custom_Domain) && (
+  <div className="w-full h-48 bg-[#1a1a1a] border border-[#00BFA5] rounded overflow-hidden mb-3 relative">
+    <div className="absolute top-0 left-0 w-[125%] h-[125%] scale-[0.8] origin-top-left">
+      <iframe
+        src={item.Custom_Domain || item.Domain}
+        className="w-full h-full"
+        sandbox="allow-scripts allow-same-origin"
+      />
+    </div>
+  </div>
+)}
 
 
-  <Menu as="div" className="relative inline-block text-left">
-    <Menu.Button className="bg-[#3a3a3a] hover:bg-[#1e1e1e] hover:text-[#00BFA5] hover:shadow-[0_0_8px_#00BFA5] px-3 py-1 rounded inline-flex items-center text-white transition-all duration-200">
-      Actions <ChevronDown className="ml-2 w-4 h-4" />
-    </Menu.Button>
-
-    <Menu.Items className="absolute right-0 z-10 mt-2 w-56 origin-top-right rounded-md bg-[#2b2b2b] shadow-lg ring-1 ring-black ring-opacity-30 focus:outline-none text-sm">
-      <div className="px-1 py-1 space-y-1">
-        {[
-          { label: 'View Site', icon: '🔍', action: () => window.open(item.Domain, '_blank'), color: 'hover:text-[#00BFA5]' },
-          { label: 'Create Post', icon: '➕', action: () => router.push(`/post?smaksly_id=${item.vercel_id}`), color: 'hover:text-[#00BFA5]' },
-          { label: 'AI Editor', icon: '✏️', action: () => router.push(`/editor?smaksly_id=${item.vercel_id}`), color: 'hover:text-[#00BFA5]' },
-          { label: 'Edit Blog', icon: '📝', action: () => router.push(`/edit-blog?smaksly_id=${item.vercel_id}`), color: 'hover:text-[#00BFA5]' },
-          { label: 'View Analytics', icon: '📊', action: () => {
-            if (item.Custom_Domain) {
-              const cleanedDomain = item.Custom_Domain.replace(/^https?:\/\//, '').replace(/\/+$/, '');
-              router.push(`/analytics?domain=${encodeURIComponent(cleanedDomain)}`);
-            }
-          }, color: 'hover:text-[#00BFA5]' },
-          { label: 'Add Domain', icon: '🌐', action: () => openDomainModal(item), color: 'hover:text-[#00FFA5]' },
-          { label: 'Delete', icon: '❌', action: () => handleDelete(item), color: 'hover:text-red-400' },
-        ].map((btn) => (
-          <Menu.Item key={btn.label}>
-            {({ active }) => (
-              <motion.button
-                onClick={btn.action}
-                whileHover={{ scale: 1.05 }}
-                className={`group flex w-full items-center rounded-md px-3 py-2 transition-all duration-200 ${active ? 'bg-[#444] ' + btn.color : 'text-white'}`}
-              >
-                <span className="mr-2">{btn.icon}</span> {btn.label}
-              </motion.button>
-            )}
-          </Menu.Item>
-        ))}
-      </div>
-    </Menu.Items>
-  </Menu>
-</motion.li>
-
-
-))}
-
-</ul>
-
-        </main>
+        {/* Menu */}
+        <Menu as="div" className="relative inline-block text-left self-end">
+          <Menu.Button className="hover:bg-[#1e1e1e] hover:text-[#00BFA5] hover:shadow-[0_0_8px_#00BFA5] px-3 py-1 rounded inline-flex items-center text-white transition-all duration-200">
+            <MoreVertical size={16} />
+          </Menu.Button>
+          <Menu.Items className="absolute right-0 z-10 mt-2 w-56 origin-top-right rounded-md bg-[#2b2b2b] shadow-lg ring-1 ring-black ring-opacity-30 focus:outline-none text-sm">
+            <div className="px-1 py-1 space-y-1">
+              {[
+                { label: 'View Site', icon: '🔍', action: () => window.open(item.Domain, '_blank'), color: 'hover:text-[#00BFA5]' },
+                { label: 'Create Post', icon: '➕', action: () => router.push(`/post?smaksly_id=${item.vercel_id}`), color: 'hover:text-[#00BFA5]' },
+              ].map((btn) => (
+                <Menu.Item key={btn.label}>
+                  {({ active }) => (
+                    <motion.button
+                      onClick={btn.action}
+                      whileHover={{ scale: 1.05 }}
+                      className={`group flex w-full items-center rounded-md px-3 py-2 transition-all duration-200 ${active ? 'bg-[#444] ' + btn.color : 'text-white'}`}
+                    >
+                      <span className="mr-2">{btn.icon}</span> {btn.label}
+                    </motion.button>
+                  )}
+                </Menu.Item>
+              ))}
+            </div>
+          </Menu.Items>
+        </Menu>
+      </motion.div>
+    ))}
+  </div>
+</main>
       </div>
 
 {showModal && (

@@ -36,7 +36,7 @@ export default function LoginPage() {
       const data = await res.json();
       if (res.ok) {
         setMessage('✅ Logged in successfully');
-        localStorage.setItem('userEmail', email); // Consider replacing with secure token storage
+        localStorage.setItem('userEmail', data.user.email); // Consider replacing with secure token storage
         setTimeout(() => (window.location.href = '/dashboard'), 1000); // Redirect to dashboard
       } else {
         setMessage(`❌ ${data.error || 'Login failed. Please try again.'}`);

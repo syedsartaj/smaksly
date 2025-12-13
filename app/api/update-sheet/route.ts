@@ -17,33 +17,31 @@ export async function POST(req: NextRequest) {
       scopes: ['https://www.googleapis.com/auth/spreadsheets'],
     });
 
-    const client = await auth.getClient() as any;
-    const sheets = google.sheets({ version: 'v4', auth: client });
+    const sheets = google.sheets({ version: 'v4', auth });
 
-    // Fetch existing data to find the row
     const res = await sheets.spreadsheets.values.get({
       spreadsheetId,
       range: 'Sheet1',
     });
 
     const rows = res.data.values || [];
-    if (rows.length < 1) {
-      return NextResponse.json({ error: 'No data found in Sheet1' }, { status: 404 });
+    if (!rows || rows.length < 2) {
+      return NextResponse.json({ error: 'No data found or headers missing in Sheet1' }, { status: 404 });
     }
 
     const headers = rows[0];
-    const rowIndex = rows.findIndex(row => row[0] === id) + 1; // +1 for header row
+    const rowIndex = rows.findIndex(row => row[0] === String(id)) + 1;
     if (rowIndex <= 1) {
-      return NextResponse.json({ error: 'Row with specified id not found' }, { status: 404 });
+      return NextResponse.json({ error: 'Row with specified ID not found' }, { status: 404 });
     }
 
-    // Prepare the updated row
     const currentRow = rows[rowIndex - 1];
-    const newRow = currentRow.map((cell, idx) =>
-      idx === 0 ? id : updates[headers[idx]] || cell
-    );
+    const newRow = currentRow.map((cell, idx) => {
+      const key = headers[idx];
+      if (key === 'id' || key === 'robottxt_publish_date') return cell;
+      return updates[key] ?? cell;
+    });
 
-    // Update the sheet
     await sheets.spreadsheets.values.update({
       spreadsheetId,
       range: `Sheet1!A${rowIndex}`,
@@ -51,7 +49,12 @@ export async function POST(req: NextRequest) {
       requestBody: { values: [newRow] },
     });
 
-    return NextResponse.json({ updatedRow: newRow });
+    const updatedRowObject = headers.reduce((acc, key, i) => {
+      acc[key] = newRow[i];
+      return acc;
+    }, {} as Record<string, string>);
+
+    return NextResponse.json({ updatedRow: updatedRowObject });
   } catch (error: any) {
     console.error('Error updating sheet:', error);
     return NextResponse.json({ error: error.message || 'Failed to update data' }, { status: 500 });

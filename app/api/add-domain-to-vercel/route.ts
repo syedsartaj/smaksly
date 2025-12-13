@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongo'; // ✅ adjust if your path differs
-import User from '@/models/User'; // ✅ your Mongoose user model
+import User from '@/models/Client'; // ✅ your Mongoose user model
 import type { NextRequest } from 'next/server';
 
 export async function POST(req: NextRequest) {

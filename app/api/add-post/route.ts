@@ -1,62 +1,62 @@
-import { google } from 'googleapis';
+// app/api/add-blog/route.ts
 import { NextRequest, NextResponse } from 'next/server';
+import { connectDB } from '../../../lib/db';
+import Client from '../../../models/Client';
 
 export async function POST(req: NextRequest) {
-  const body = await req.json();
-
   const {
-    spreadsheetId,
-    slug,
-    link, code_template, title, image_url,
-    robottxt_headline, robottxt_url, robottxt_auther_name,
-    robottxt_auther_url, robottxt_image_url, robottxt_image_width,
-    robottxt_image_height, robottxt_publish_date, robottxt_modify_date,
-    robottxt_publisher_logo, robottxt_publisher_keyword, category, body: postBody
-  } = body;
+    domain, // previously spreadsheetId
+    slug, title, image_url,
+    robottxt_publish_date, robottxt_modify_date,
+    category, body: postBody,
+  } = await req.json();
 
   try {
-    const auth = new google.auth.GoogleAuth({
-      credentials: {
-        client_email: process.env.GOOGLE_CLIENT_EMAIL!,
-        private_key: process.env.GOOGLE_PRIVATE_KEY!.replace(/\\n/g, '\n'),
-      },
-      scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-    });
+    await connectDB();
 
-    const sheets = google.sheets({ version: 'v4', auth });
+    // Find user by domain
+    const client = await Client.findOne({ 'Deployments.vercel_id': domain });
+    if (!client) {
+      return NextResponse.json({ error: `No deployment found for domain: ${domain}` }, { status: 404 });
+    }
 
-    const sheetName = 'Sheet1';
+    // Find the deployment index
+    const deployment = client.Deployments.find((d :any)=> d.vercel_id === domain);
+    if (!deployment) {
+      return NextResponse.json({ error: `Deployment not found for domain: ${domain}` }, { status: 404 });
+    }
 
-    // Step 1: Get current last ID from column A
-    const res = await sheets.spreadsheets.values.get({
-      spreadsheetId,
-      range: `${sheetName}!A2:A`, // Only column A without header
-    });
+    const blogs = deployment.Data?.[0]?.blogs || [];
 
-    const existingRows = res.data.values || [];
-    const lastId = existingRows.length > 0 ? parseInt(existingRows[existingRows.length - 1][0], 10) : 0;
-    const newId = lastId + 1;
+    // Check if slug already exists
+    const existing = blogs.find((blog :any) => blog.slug === slug);
+    if (existing) {
+      return NextResponse.json({ error: `Slug "${slug}" already exists.` }, { status: 400 });
+    }
 
-    // Step 2: Append the new row
-    const values = [[
-      newId, link, code_template, title, image_url,
-      robottxt_headline, robottxt_url, robottxt_auther_name,
-      robottxt_auther_url, robottxt_image_url, robottxt_image_width,
-      robottxt_image_height, robottxt_publish_date, robottxt_modify_date,
-      robottxt_publisher_logo, robottxt_publisher_keyword, category, postBody,slug,
-    ]];
+    // Determine new ID
+    const lastId = blogs.length > 0 ? parseInt(blogs[blogs.length - 1].id) : 0;
+    const newId = String(lastId + 1);
 
-    await sheets.spreadsheets.values.append({
-      spreadsheetId,
-      range: `${sheetName}!A1`,
-      valueInputOption: 'USER_ENTERED',
-      insertDataOption: 'INSERT_ROWS',
-      requestBody: { values },
-    });
+    // Create new blog
+    const newBlog = {
+      id: newId,
+      title,
+      image_url,
+      publish_date: new Date(robottxt_publish_date),
+      modify_date: new Date(robottxt_modify_date),
+      category,
+      body: postBody,
+      slug,
+    };
 
-    return NextResponse.json({ message: '✅ Row inserted successfully', id: newId });
+    // Push new blog into blogs[]
+    deployment.Data[0].blogs.push(newBlog);
+    await client.save();
+
+    return NextResponse.json({ message: '✅ Blog inserted successfully', id: newId });
   } catch (err: any) {
-    console.error('Add post error:', err);
+    console.error('Add blog error:', err);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

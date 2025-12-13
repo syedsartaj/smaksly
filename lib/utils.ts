@@ -1,5 +1,6 @@
-// lib/utils.ts
-export function generateVerificationToken(): string {
-  const random = Math.random().toString(36).substring(2, 15);
-  return `smaksly-${random}`;
+import { clsx, type ClassValue } from "clsx"
+import { twMerge } from "tailwind-merge"
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs))
 }

@@ -1,7 +1,7 @@
 // app/api/generate-token/route.ts
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongo';
-import User from '@/models/User';
+import User from '@/models/Client';
 import { generateVerificationToken } from '@/lib/utils';
 
 export async function POST(req: Request) {

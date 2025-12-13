@@ -68,12 +68,13 @@ export default function FullEditor() {
     ButtonText: '',
     companyName: '',
     companySlogan: '',
-    body_aboutus: '', body_contactus: '', body_privacy_policy: '',body_privacypolicy:'',
+    body_aboutus: '', body_contactus: '', body_privacy_policy: '',body_privacypolicy:'',emailid:'',
   });
   const searchParams = useSearchParams();
-  const spreadsheetId = searchParams.get('spreadsheetId');
-
+  const spreadsheetId = searchParams.get('smaksly_id');
+  console.log(spreadsheetId);
   const updateSheet = async (key: string, value: any) => {
+    console.log('Sending config update', rightPanelData);
     if (!spreadsheetId) return;
     const isConfig = typeof value === 'object' && value !== null && !Array.isArray(value);
     if (isConfig) setLoadingConfig(true);
@@ -356,6 +357,13 @@ export default function FullEditor() {
                   value={rightPanelData.body_privacypolicy}
                   onChange={(e) => setRightPanelData((prev) => ({ ...prev, body_privacypolicy: e.target.value }))}
                   placeholder="Privacy Policy Body"
+                  className="w-full p-2 rounded-lg bg-[#2A2B2D] text-[#E4E4E7] focus:outline-none focus:ring-2 focus:ring-[#3A3B3D]"
+                  style={{ fontFamily: 'Roboto, sans-serif' }}
+                />
+                <textarea
+                  value={rightPanelData.emailid}
+                  onChange={(e) => setRightPanelData((prev) => ({ ...prev, emailid: e.target.value }))}
+                  placeholder="Custom email id"
                   className="w-full p-2 rounded-lg bg-[#2A2B2D] text-[#E4E4E7] focus:outline-none focus:ring-2 focus:ring-[#3A3B3D]"
                   style={{ fontFamily: 'Roboto, sans-serif' }}
                 />
