@@ -81,7 +81,7 @@ try {
 if (!project.id) throw new Error("❌ Failed to create Vercel project");
 
     // Inject userEmail as env variable into Vercel project
-    await fetch(`https://api.vercel.com/v10/projects/${project.name}/env`, {
+    const envUserEmailRes = await fetch(`https://api.vercel.com/v10/projects/${project.id}/env`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${VERCEL_TOKEN}`,
@@ -90,11 +90,14 @@ if (!project.id) throw new Error("❌ Failed to create Vercel project");
       body: JSON.stringify({
         key: 'USER_EMAIL',
         value: userEmail,
-        target: ['production', 'preview', 'development']
+        target: ['production', 'preview', 'development'],
+        type: 'encrypted'
       }),
     });
-    // Inject userEmail as env variable into Vercel project
-    await fetch(`https://api.vercel.com/v10/projects/${project.name}/env`, {
+    console.log('USER_EMAIL env status:', envUserEmailRes.status);
+
+    // Inject MongoDB URL as env variable into Vercel project
+    const envMongoRes = await fetch(`https://api.vercel.com/v10/projects/${project.id}/env`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${VERCEL_TOKEN}`,
@@ -103,13 +106,59 @@ if (!project.id) throw new Error("❌ Failed to create Vercel project");
       body: JSON.stringify({
         key: 'MongoDB_URL',
         value: MongoDB_URL,
-        target: ['production', 'preview', 'development']
+        target: ['production', 'preview', 'development'],
+        type: 'encrypted'
       }),
     });
+    console.log('MongoDB_URL env status:', envMongoRes.status);
+
+    // Inject SMAKSLY_ID (project name/vercel_id) as env variable for blog fetching
+    const envSmakslyRes = await fetch(`https://api.vercel.com/v10/projects/${project.id}/env`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${VERCEL_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        key: 'SMAKSLY_ID',
+        value: projectName,
+        target: ['production', 'preview', 'development'],
+        type: 'plain'
+      }),
+    });
+    console.log('SMAKSLY_ID env status:', envSmakslyRes.status);
+    const envSmakslyBody = await envSmakslyRes.text();
+    console.log('SMAKSLY_ID env response:', envSmakslyBody);
+
     const finalDomain = `https://${projectName}.vercel.app`;
 
     await git.addRemote("origin", `https://${GITHUB_TOKEN}@github.com/${GITHUB_USERNAME}/${newRepoName}.git`);
     await git.push("origin", "main");
+    console.log('✅ Pushed to GitHub, waiting for initial build...');
+
+    // Wait for the initial build to complete (longer wait)
+    await new Promise(resolve => setTimeout(resolve, 5000));
+
+    // Trigger a production redeploy to pick up the env vars
+    const redeployRes = await fetch('https://api.vercel.com/v13/deployments', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${VERCEL_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        name: projectName,
+        target: 'production',
+        gitSource: {
+          type: 'github',
+          repoId: createRepoData.id,
+          ref: 'main',
+        },
+      }),
+    });
+    const redeployBody = await redeployRes.text();
+    console.log('🔄 Redeploy status:', redeployRes.status);
+    console.log('🔄 Redeploy response:', redeployBody);
 
     // Default layout + blog structure
     const layout = {

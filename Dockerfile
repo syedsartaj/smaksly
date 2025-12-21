@@ -1,30 +1,60 @@
-FROM node:18-alpine
+# Optimized Dockerfile for GCP Cloud Run
+# Multi-stage build for smaller image size
 
-# Set working directory
+FROM node:20-alpine AS base
+
+# Stage 1: Install dependencies
+FROM base AS deps
+RUN apk add --no-cache libc6-compat git
 WORKDIR /app
 
-# Install Git (fixes spawn git ENOENT) and bash
-RUN apk add --no-cache git bash
-
-# Set Git identity globally (fixes "Author identity unknown")
-RUN git config --global user.email "syedsartajahmed01@gmail.com" \
- && git config --global user.name "syedsartaj"
-
-# Copy dependencies and install
 COPY package.json package-lock.json ./
-RUN npm install
+RUN npm ci --legacy-peer-deps
 
-# Copy application code
+# Stage 2: Build the application
+FROM base AS builder
+WORKDIR /app
+
+# Install git for any build-time git operations
+RUN apk add --no-cache git
+
+COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Include environment file for build
-COPY .env.local .env.local
+# Disable telemetry
+ENV NEXT_TELEMETRY_DISABLED=1
 
-# Build the Next.js app
+# Build (standalone output configured in next.config.ts)
 RUN npm run build
 
-# Expose port
-EXPOSE 3000
+# Stage 3: Production runner
+FROM base AS runner
+WORKDIR /app
 
-# Start the application
-CMD ["npm", "start"]
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+
+# Create non-root user for security
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 nextjs
+
+# Copy public assets
+COPY --from=builder /app/public ./public
+
+# Set permissions for Next.js cache
+RUN mkdir .next
+RUN chown nextjs:nodejs .next
+
+# Copy standalone build output
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+
+# Switch to non-root user
+USER nextjs
+
+# Cloud Run expects port 8080
+EXPOSE 8080
+ENV PORT=8080
+ENV HOSTNAME="0.0.0.0"
+
+CMD ["node", "server.js"]
