@@ -41,3 +41,16 @@ export type { ISEOMetric, MetricPeriod } from './SEOMetric';
 // Categories
 export { Category } from './Category';
 export type { ICategory } from './Category';
+
+// Website Builder
+export { BuilderProject } from './BuilderProject';
+export type { IBuilderProject, BuilderProjectStatus, IBuilderProjectSettings, IBuilderBlogConfig } from './BuilderProject';
+
+export { BuilderPage } from './BuilderPage';
+export type { IBuilderPage, BuilderPageType, BuilderPageStatus, IAIConversationMessage, IPageVersion } from './BuilderPage';
+
+export { BuilderComponent } from './BuilderComponent';
+export type { IBuilderComponent, BuilderComponentType, BuilderComponentScope } from './BuilderComponent';
+
+export { BuilderAsset } from './BuilderAsset';
+export type { IBuilderAsset, BuilderAssetType } from './BuilderAsset';

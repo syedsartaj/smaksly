@@ -143,6 +143,7 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen p-6 bg-[#1f1d1d] text-white">
+      <main className="max-w-7xl mx-auto">
   <h2 className="text-xl font-semibold mb-4">Portfolios</h2>
 
   {/* Grid layout */}
@@ -210,7 +211,6 @@ export default function DashboardPage() {
     ))}
   </div>
 </main>
-      </div>
 
 {showModal && (
   <div className="fixed top-0 left-0 w-full h-full bg-black bg-opacity-50 flex items-center justify-center z-50">

@@ -170,6 +170,7 @@ export default function IntegrationsPage() {
 
   return (
     <div className="min-h-screen p-6 bg-gradient-to-br from-[#0C0A1F] via-[#1a1830] to-[#0C0A1F]">
+      <main className="max-w-7xl mx-auto">
           {/* Page Header */}
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-white mb-2">Integrations</h1>
@@ -318,7 +319,6 @@ export default function IntegrationsPage() {
             ))}
           </div>
         </main>
-      </div>
 
       {/* Connection Modal */}
       <AnimatePresence>

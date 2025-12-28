@@ -23,6 +23,7 @@ import {
   Layout,
   Palette,
   PenTool,
+  Wand2,
 } from 'lucide-react';
 
 const navigation = [
@@ -96,14 +97,15 @@ const navigation = [
     icon: DollarSign,
   },
   {
+    name: 'Website Builder',
+    href: '/admin/builder',
+    icon: Wand2,
+    badge: 'AI',
+  },
+  {
     name: 'Templates',
     href: '/admin/templates',
     icon: Layout,
-  },
-  {
-    name: 'Page Builder',
-    href: '/admin/themes',
-    icon: Palette,
   },
   {
     name: 'Create Post',

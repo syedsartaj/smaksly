@@ -134,6 +134,7 @@ export default function ProjectsPage() {
 
   return (
     <div className="min-h-screen p-6 bg-gradient-to-br from-[#0C0A1F] via-[#1a1830] to-[#0C0A1F]">
+      <main className="max-w-7xl mx-auto">
           {/* Page Header */}
           <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8 gap-4">
             <div>
@@ -295,7 +296,6 @@ export default function ProjectsPage() {
             </div>
           )}
         </main>
-      </div>
 
       {/* Add Repository Modal */}
       <AnimatePresence>
