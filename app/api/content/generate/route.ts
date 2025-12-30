@@ -4,9 +4,17 @@ import { Content, Website, Keyword } from '@/models';
 import OpenAI from 'openai';
 import mongoose from 'mongoose';
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+// Lazy-load OpenAI client to avoid build-time errors
+let openaiClient: OpenAI | null = null;
+
+function getOpenAI(): OpenAI {
+  if (!openaiClient) {
+    openaiClient = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+    });
+  }
+  return openaiClient;
+}
 
 interface GeneratedContent {
   title: string;
@@ -133,7 +141,7 @@ Format your response as JSON with this structure:
 
 Return ONLY the JSON object, no additional text.`;
 
-    const completion = await openai.chat.completions.create({
+    const completion = await getOpenAI().chat.completions.create({
       model: 'gpt-4o',
       messages: [
         {

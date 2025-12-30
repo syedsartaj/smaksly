@@ -16,9 +16,17 @@ import {
   SanitizationResult,
 } from './code-sanitizer';
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+// Lazy-load OpenAI client to avoid build-time errors
+let openaiClient: OpenAI | null = null;
+
+function getOpenAI(): OpenAI {
+  if (!openaiClient) {
+    openaiClient = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+    });
+  }
+  return openaiClient;
+}
 
 export interface ProjectSettings {
   siteName: string;
@@ -109,7 +117,7 @@ export class BuilderAIService {
         projectSettings,
       });
 
-      const completion = await openai.chat.completions.create({
+      const completion = await getOpenAI().chat.completions.create({
         model: this.model,
         messages: [
           { role: 'system', content: PAGE_GENERATION_SYSTEM_PROMPT },
@@ -163,7 +171,7 @@ export class BuilderAIService {
         });
       }
 
-      const completion = await openai.chat.completions.create({
+      const completion = await getOpenAI().chat.completions.create({
         model: this.model,
         messages: [
           { role: 'system', content: CODE_EDIT_SYSTEM_PROMPT },
@@ -204,7 +212,7 @@ export class BuilderAIService {
         projectSettings,
       });
 
-      const completion = await openai.chat.completions.create({
+      const completion = await getOpenAI().chat.completions.create({
         model: this.model,
         messages: [
           { role: 'system', content: PAGE_GENERATION_SYSTEM_PROMPT },
@@ -237,7 +245,7 @@ export class BuilderAIService {
     try {
       const userPrompt = createImprovementAnalysisPrompt(code);
 
-      const completion = await openai.chat.completions.create({
+      const completion = await getOpenAI().chat.completions.create({
         model: this.model,
         messages: [
           {
@@ -315,7 +323,7 @@ export class BuilderAIService {
         content: newInstruction,
       });
 
-      const completion = await openai.chat.completions.create({
+      const completion = await getOpenAI().chat.completions.create({
         model: this.model,
         messages,
         temperature: 0.5,
