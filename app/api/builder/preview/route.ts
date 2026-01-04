@@ -207,10 +207,39 @@ function generatePreviewHTML(
       });
     };
 
-    // Mock next/link component
+    // Mock next/link component - prevent actual navigation in preview
     const Link = ({ href, children, className, ...props }) => {
-      return React.createElement('a', { href: href || '#', className: className, ...props }, children);
+      const handleClick = (e) => {
+        e.preventDefault();
+        // Show a toast notification instead of navigating
+        showPreviewToast('Navigation: ' + (href || '/'));
+      };
+      return React.createElement('a', {
+        href: href || '#',
+        className: className,
+        onClick: handleClick,
+        style: { cursor: 'pointer' },
+        ...props
+      }, children);
     };
+
+    // Toast notification for preview
+    let toastTimeout;
+    function showPreviewToast(message) {
+      let toast = document.getElementById('preview-toast');
+      if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'preview-toast';
+        toast.style.cssText = 'position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #18181b; color: white; padding: 12px 24px; border-radius: 8px; font-size: 14px; z-index: 9999; box-shadow: 0 4px 12px rgba(0,0,0,0.3); transition: opacity 0.3s; display: flex; align-items: center; gap: 8px;';
+        document.body.appendChild(toast);
+      }
+      toast.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>' + message;
+      toast.style.opacity = '1';
+      clearTimeout(toastTimeout);
+      toastTimeout = setTimeout(() => {
+        toast.style.opacity = '0';
+      }, 2000);
+    }
 
     // Mock lucide-react icons (basic placeholders)
     const createIcon = (name) => ({ className, size = 24, ...props }) => {

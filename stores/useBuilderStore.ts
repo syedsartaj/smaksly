@@ -162,6 +162,8 @@ interface BuilderState {
   // Complex Actions
   loadProject: (projectId: string) => Promise<void>;
   saveCurrentPage: () => Promise<boolean>;
+  saveCurrentComponent: () => Promise<boolean>;
+  saveCurrentCode: () => Promise<boolean>;
   generatePreview: () => Promise<void>;
 }
 
@@ -206,6 +208,7 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
   setCurrentPage: (page) =>
     set({
       currentPage: page,
+      currentComponent: page ? null : get().currentComponent, // Clear component when selecting page
       code: page?.code || '',
       originalCode: page?.code || '',
       isDirty: false,
@@ -230,7 +233,15 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
     })),
 
   setComponents: (components) => set({ components }),
-  setCurrentComponent: (component) => set({ currentComponent: component }),
+  setCurrentComponent: (component) =>
+    set({
+      currentComponent: component,
+      currentPage: component ? null : get().currentPage, // Clear page when selecting component
+      code: component?.code || '',
+      originalCode: component?.code || '',
+      isDirty: false,
+      selectedCode: null,
+    }),
   addComponent: (component) =>
     set((state) => ({
       components: [...state.components, component],
@@ -358,6 +369,53 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
       console.error('Error saving page:', error);
       return false;
     }
+  },
+
+  saveCurrentComponent: async () => {
+    const { currentComponent, code, isDirty } = get();
+
+    if (!currentComponent || !isDirty) {
+      return true;
+    }
+
+    try {
+      const response = await fetch(`/api/builder/components/${currentComponent._id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code }),
+      });
+
+      const data = await response.json();
+
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to save component');
+      }
+
+      set({
+        originalCode: code,
+        isDirty: false,
+        currentComponent: { ...currentComponent, code },
+      });
+
+      // Update in components array
+      get().updateComponent(currentComponent._id, { code });
+
+      return true;
+    } catch (error) {
+      console.error('Error saving component:', error);
+      return false;
+    }
+  },
+
+  saveCurrentCode: async () => {
+    const { currentPage, currentComponent } = get();
+
+    if (currentPage) {
+      return get().saveCurrentPage();
+    } else if (currentComponent) {
+      return get().saveCurrentComponent();
+    }
+    return true;
   },
 
   generatePreview: async () => {

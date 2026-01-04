@@ -3,7 +3,7 @@ export const PAGE_GENERATION_SYSTEM_PROMPT = `You are an expert Next.js/React de
 CRITICAL RULES:
 1. Generate ONLY valid TypeScript/TSX React components
 2. Use Tailwind CSS for ALL styling - no inline styles or CSS modules
-3. Use semantic HTML5 elements (header, nav, main, section, article, footer)
+3. Use semantic HTML5 elements (main, section, article, aside, etc.)
 4. Components must be fully self-contained and functional
 5. All images should use next/image with placeholder dimensions
 6. Include proper TypeScript types/interfaces
@@ -11,6 +11,8 @@ CRITICAL RULES:
 8. Accessibility: aria-labels, semantic HTML, proper heading hierarchy
 9. DO NOT use any external libraries other than those specified
 10. Keep the code clean, readable, and production-ready
+11. DO NOT include Header or Footer in pages - they are in the shared Layout component
+12. Pages should only contain the main body content wrapped in <main> tag
 
 COMPONENT STRUCTURE:
 - Export default function component
@@ -33,23 +35,87 @@ STYLING GUIDELINES:
 - Apply hover and focus states for interactive elements
 - Use proper color contrast for accessibility
 
-BLOG DATA FETCHING (for blog pages):
-When creating blog-related pages, the component will receive blogs as a prop:
+MODULAR COMPONENT TYPES:
+When generating specific component types, follow these guidelines:
+
+NAVIGATION/HEADER:
+- Include logo area, navigation links, mobile menu
+- Use 'use client' for mobile menu toggle
+- Sticky header with backdrop blur recommended
+- Include social links if provided
+- Support dark/light mode toggle placeholder
+
+FOOTER:
+- Multi-column layout on desktop, stacked on mobile
+- Include: company info, quick links, contact info, social links
+- Copyright notice with dynamic year
+- Newsletter signup placeholder
+- Legal links (Privacy, Terms)
+
+HOME PAGE:
+- Hero section with CTA
+- Features/services grid
+- Testimonials section
+- About preview section
+- Blog preview (latest posts)
+- CTA section before footer
+NOTE: Do NOT include Header or Footer - they are in the Layout component
+
+CONTACT PAGE:
+- Contact form with validation
+- Contact information cards (email, phone, address)
+- Map placeholder
+- FAQ section optional
+- Business hours if applicable
+NOTE: Do NOT include Header or Footer - they are in the Layout component
+
+BLOG LISTING:
+- Grid/list of blog posts with pagination
+- Category/tag filters
+- Search functionality placeholder
+- Featured post highlight
+NOTE: Do NOT include Header or Footer - they are in the Layout component
+
+BLOG POST DETAIL:
+- Article content with proper typography
+- Author bio section
+- Related posts
+- Social share buttons
+- Table of contents for long posts
+- Comments section placeholder
+NOTE: Do NOT include Header or Footer - they are in the Layout component
+
+BLOG DATA FOR PAGES:
+For blog listing and blog post pages, use MOCK DATA directly in the component (not props).
+DO NOT use Props interface for pages - Next.js App Router pages cannot receive custom props.
+
+For blog listing pages, create mock data like this:
 \`\`\`typescript
-interface BlogPost {
-  _id: string;
-  title: string;
-  slug: string;
-  excerpt: string;
-  featuredImage?: string;
-  publishedAt: string;
-  authorName: string;
-  readingTime: number;
-  tags: string[];
+const blogs = [
+  {
+    _id: '1',
+    title: 'Getting Started with Next.js',
+    slug: 'getting-started-nextjs',
+    excerpt: 'Learn how to build modern web applications with Next.js...',
+    featuredImage: '/placeholder.svg',
+    publishedAt: new Date().toISOString(),
+    authorName: 'Admin',
+    readingTime: 5,
+    tags: ['nextjs', 'react'],
+  },
+  // Add 5-6 more mock blog posts
+];
+\`\`\`
+
+For blog post detail pages with dynamic routes [slug], use:
+\`\`\`typescript
+interface PageProps {
+  params: Promise<{ slug: string }>;
 }
 
-interface Props {
-  blogs: BlogPost[];
+export default async function BlogPost({ params }: PageProps) {
+  const { slug } = await params;
+  // Use mock data for the blog post
 }
 \`\`\`
 
@@ -140,9 +206,16 @@ IMPORTANT:
 - Use placeholder images from /placeholder.svg or next/image with unoptimized for external URLs
 - Make sure all interactive elements have proper hover/focus states
 - Include proper spacing and visual hierarchy
+- DO NOT include Header or Footer - they are handled by the Layout component
+- Wrap your page content in a <main> tag
 
 Generate the complete page component now:`;
 };
+
+export interface PageInfo {
+  name: string;
+  path: string;
+}
 
 export const createComponentGenerationPrompt = (params: {
   description: string;
@@ -154,8 +227,100 @@ export const createComponentGenerationPrompt = (params: {
     secondaryColor: string;
     fontFamily: string;
   };
+  pages?: PageInfo[];
 }): string => {
-  const { description, componentName, componentType, projectSettings } = params;
+  const { description, componentName, componentType, projectSettings, pages = [] } = params;
+
+  // Determine if this is a navigation or footer component
+  const isNavigation = componentName.toLowerCase().includes('nav') ||
+                       componentName.toLowerCase().includes('header') ||
+                       description.toLowerCase().includes('navigation') ||
+                       description.toLowerCase().includes('header');
+
+  const isFooter = componentName.toLowerCase().includes('footer') ||
+                   description.toLowerCase().includes('footer');
+
+  let specialInstructions = '';
+
+  if (isNavigation) {
+    const navLinks = pages.length > 0
+      ? pages.map(p => `{ name: "${p.name}", href: "${p.path}" }`).join(', ')
+      : '{ name: "Home", href: "/" }, { name: "About", href: "/about" }, { name: "Blog", href: "/blog" }, { name: "Contact", href: "/contact" }';
+
+    specialInstructions = `
+NAVIGATION/HEADER SPECIFIC REQUIREMENTS:
+- Use 'use client' for mobile menu toggle state
+- Include logo placeholder (next/image with siteName fallback text)
+- Use next/link for navigation links - CRITICAL for proper routing
+- Mobile hamburger menu with slide-in or dropdown
+- Sticky header with blur backdrop (fixed top-0 w-full)
+- Desktop: horizontal nav items with hover states
+- Mobile: collapsible menu with smooth transition
+- Include call-to-action button in header (e.g., "Get Started", "Contact Us")
+- Use the primary color for accents and hover states
+
+PROPS INTERFACE (REQUIRED):
+interface HeaderProps {
+  siteName?: string;
+}
+- The siteName prop MUST be optional with a default value: siteName = '${projectSettings.siteName}'
+- Example: export default function Header({ siteName = '${projectSettings.siteName}' }: HeaderProps)
+
+NAVIGATION LINKS TO INCLUDE:
+${navLinks}
+
+Use Link from next/link for all navigation:
+import Link from 'next/link';
+<Link href="/about" className="hover:text-primary">About</Link>
+
+- Example structure:
+  <header className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-md border-b">
+    <nav className="container mx-auto px-4 py-4 flex items-center justify-between">
+      {/* Logo */} {/* Desktop Nav */} {/* Mobile Menu Button */}
+    </nav>
+    {/* Mobile Menu Overlay */}
+  </header>
+`;
+  } else if (isFooter) {
+    const footerLinks = pages.length > 0
+      ? pages.map(p => `{ name: "${p.name}", href: "${p.path}" }`).join(', ')
+      : '{ name: "Home", href: "/" }, { name: "About", href: "/about" }, { name: "Blog", href: "/blog" }, { name: "Contact", href: "/contact" }';
+
+    specialInstructions = `
+FOOTER SPECIFIC REQUIREMENTS:
+- Multi-column grid layout (4 columns on lg, 2 on md, 1 on mobile)
+- Column 1: Company info, logo, brief description
+- Column 2: Quick Links - USE THESE EXACT LINKS:
+  ${footerLinks}
+- Column 3: Contact Info (address, phone, email with icons)
+- Column 4: Newsletter signup form
+- Bottom bar: Copyright with dynamic year, Privacy Policy, Terms links
+- Social media icons row (Facebook, Twitter, LinkedIn, Instagram)
+- Use neutral dark background (zinc-900) with light text
+- USE next/link for all navigation links:
+  import Link from 'next/link';
+  <Link href="/about">About</Link>
+
+PROPS INTERFACE (REQUIRED):
+interface FooterProps {
+  siteName?: string;
+}
+- The siteName prop MUST be optional with a default value: siteName = '${projectSettings.siteName}'
+- Example: export default function Footer({ siteName = '${projectSettings.siteName}' }: FooterProps)
+
+- Example structure:
+  <footer className="bg-zinc-900 text-white">
+    <div className="container mx-auto px-4 py-12">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+        {/* Columns */}
+      </div>
+    </div>
+    <div className="border-t border-zinc-800 py-6">
+      {/* Bottom bar */}
+    </div>
+  </footer>
+`;
+  }
 
   return `Create a reusable React component named "${componentName}" of type "${componentType}".
 
@@ -167,6 +332,8 @@ SITE CONTEXT:
 - Primary Color: ${projectSettings.primaryColor}
 - Secondary Color: ${projectSettings.secondaryColor}
 - Font Family: ${projectSettings.fontFamily}
+
+${specialInstructions}
 
 REQUIREMENTS:
 1. Create a reusable, prop-driven component

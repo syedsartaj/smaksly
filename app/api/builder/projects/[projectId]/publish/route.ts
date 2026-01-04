@@ -13,6 +13,46 @@ interface RouteParams {
 
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN!;
 const GITHUB_USERNAME = process.env.GITHUB_USERNAME!;
+const VERCEL_TOKEN = process.env.VERCEL_TOKEN!;
+
+// Helper function to trigger Vercel deployment
+async function triggerVercelDeployment(repoName: string, projectId: string) {
+  try {
+    const deployResponse = await fetch(
+      'https://api.vercel.com/v13/deployments',
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${VERCEL_TOKEN}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: repoName,
+          project: projectId,
+          target: 'production',
+          gitSource: {
+            type: 'github',
+            repo: `${GITHUB_USERNAME}/${repoName}`,
+            ref: 'main',
+          },
+        }),
+      }
+    );
+
+    if (deployResponse.ok) {
+      const deployment = await deployResponse.json();
+      console.log('Triggered Vercel deployment:', deployment.id);
+      return deployment;
+    } else {
+      const errorData = await deployResponse.json();
+      console.error('Failed to trigger deployment:', errorData);
+      return null;
+    }
+  } catch (error) {
+    console.error('Error triggering deployment:', error);
+    return null;
+  }
+}
 
 // POST - Publish project to GitHub
 export async function POST(req: NextRequest, { params }: RouteParams) {
@@ -131,18 +171,94 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     const log = await git.log({ maxCount: 1 });
     const commitHash = log.latest?.hash || '';
 
+    // Create or connect Vercel project
+    let vercelProjectId = project.vercelProjectId;
+    let deploymentUrl = project.deploymentUrl;
+
+    if (!vercelProjectId && VERCEL_TOKEN) {
+      try {
+        // Check if project already exists on Vercel
+        const checkProjectResponse = await fetch(
+          `https://api.vercel.com/v9/projects/${repoName}`,
+          {
+            headers: {
+              Authorization: `Bearer ${VERCEL_TOKEN}`,
+            },
+          }
+        );
+
+        if (checkProjectResponse.ok) {
+          // Project exists, get its ID
+          const existingProject = await checkProjectResponse.json();
+          vercelProjectId = existingProject.id;
+          deploymentUrl = `https://${existingProject.name}.vercel.app`;
+          console.log('Found existing Vercel project:', vercelProjectId);
+        } else {
+          // Create new Vercel project connected to GitHub
+          const createProjectResponse = await fetch(
+            'https://api.vercel.com/v10/projects',
+            {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${VERCEL_TOKEN}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                name: repoName,
+                framework: 'nextjs',
+                gitRepository: {
+                  type: 'github',
+                  repo: `${GITHUB_USERNAME}/${repoName}`,
+                },
+                buildCommand: 'next build',
+                installCommand: 'npm install',
+                outputDirectory: '.next',
+              }),
+            }
+          );
+
+          if (createProjectResponse.ok) {
+            const newProject = await createProjectResponse.json();
+            vercelProjectId = newProject.id;
+            deploymentUrl = `https://${newProject.name}.vercel.app`;
+            console.log('Created new Vercel project:', vercelProjectId);
+
+            // Trigger initial deployment for newly created project
+            await triggerVercelDeployment(repoName, vercelProjectId);
+          } else {
+            const errorData = await createProjectResponse.json();
+            console.error('Failed to create Vercel project:', errorData);
+            // Continue anyway - GitHub repo was created successfully
+          }
+        }
+      } catch (vercelError) {
+        console.error('Vercel API error:', vercelError);
+        // Continue anyway - GitHub repo was created successfully
+      }
+    }
+
+    // Always trigger deployment if we have a Vercel project
+    if (vercelProjectId && VERCEL_TOKEN) {
+      await triggerVercelDeployment(repoName, vercelProjectId);
+    }
+
     // Update project
     project.lastDeployedAt = new Date();
     project.lastCommitHash = commitHash;
     project.lastCommitMessage = message;
     project.status = 'published';
-    project.deploymentUrl = `https://${repoName}.vercel.app`;
+    project.vercelProjectId = vercelProjectId || undefined;
+    project.deploymentUrl = deploymentUrl || `https://${repoName}.vercel.app`;
     await project.save();
 
-    // Also update the Website model with git repo info
+    // Update the Website model with deployment info and mark as active
     if (website) {
       await Website.findByIdAndUpdate(project.websiteId, {
         gitRepo: project.gitRepoUrl,
+        vercelProjectName: repoName,
+        status: 'active',
+        // Store deployment URL for easy access
+        customDomain: project.deploymentUrl,
       });
     }
 
@@ -151,10 +267,13 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       data: {
         gitRepoUrl: project.gitRepoUrl,
         deploymentUrl: project.deploymentUrl,
+        vercelProjectId,
         commitHash,
         commitMessage: message,
       },
-      message: 'Project published successfully. Vercel will auto-deploy from GitHub.',
+      message: vercelProjectId
+        ? 'Project published successfully and deployed to Vercel.'
+        : 'Project published to GitHub. Connect to Vercel manually or add VERCEL_TOKEN.',
     });
   } catch (error) {
     console.error('Error publishing project:', error);
@@ -312,9 +431,31 @@ body {
 `;
   await fs.writeFile(path.join(projectPath, 'app', 'globals.css'), globalsCss);
 
+  // Check for Header and Footer components
+  const headerComponent = components.find(
+    (c) => c.name?.toString().toLowerCase().includes('header') || c.name?.toString().toLowerCase().includes('nav')
+  );
+  const footerComponent = components.find(
+    (c) => c.name?.toString().toLowerCase().includes('footer')
+  );
+
+  // Generate component imports and usage
+  const componentImports: string[] = [];
+  // Pass siteName and other settings as props to Header and Footer
+  const headerJsx = headerComponent ? `<Header siteName="${siteName}" />` : '';
+  const footerJsx = footerComponent ? `<Footer siteName="${siteName}" />` : '';
+
+  if (headerComponent) {
+    componentImports.push(`import Header from '@/components/${headerComponent.name}';`);
+  }
+  if (footerComponent) {
+    componentImports.push(`import Footer from '@/components/${footerComponent.name}';`);
+  }
+
   // Generate layout.tsx
   const layoutCode = `import type { Metadata } from 'next';
 import './globals.css';
+${componentImports.join('\n')}
 
 export const metadata: Metadata = {
   title: '${siteName}',
@@ -334,7 +475,9 @@ export default function RootLayout({
         <link href="https://fonts.googleapis.com/css2?family=${fontFamily.replace(/ /g, '+')}:wght@400;500;600;700&display=swap" rel="stylesheet" />
       </head>
       <body className="min-h-screen bg-white antialiased">
+        ${headerJsx}
         {children}
+        ${footerJsx}
       </body>
     </html>
   );

@@ -10,7 +10,7 @@ const websiteSchema = z.object({
   name: z.string().min(1, 'Website name is required').max(100),
   domain: z.string().min(1, 'Domain is required').regex(/^[a-zA-Z0-9][a-zA-Z0-9-_.]+\.[a-zA-Z]{2,}$/, 'Invalid domain format'),
   niche: z.string().min(1, 'Niche is required'),
-  categoryId: z.string().min(1, 'Category is required'),
+  categoryId: z.string().optional(), // Made optional - will use default category
   description: z.string().max(500).optional(),
   status: z.enum(['active', 'inactive', 'pending', 'suspended']),
 
@@ -269,22 +269,19 @@ export function AddWebsiteModal({ isOpen, onClose, onSuccess, editId }: AddWebsi
 
                 <div>
                   <label className="block text-sm font-medium text-zinc-400 mb-1">
-                    Category *
+                    Category
                   </label>
                   <select
                     {...register('categoryId')}
                     className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   >
-                    <option value="">Select category</option>
+                    <option value="">General (default)</option>
                     {categories.map((cat) => (
                       <option key={cat._id} value={cat._id}>
                         {'  '.repeat(cat.level)}{cat.name}
                       </option>
                     ))}
                   </select>
-                  {errors.categoryId && (
-                    <p className="mt-1 text-sm text-red-400">{errors.categoryId.message}</p>
-                  )}
                 </div>
               </div>
 

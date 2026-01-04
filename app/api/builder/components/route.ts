@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/db';
-import { BuilderComponent, BuilderProject } from '@/models';
+import { BuilderComponent, BuilderProject, BuilderPage } from '@/models';
 import { builderAIService } from '@/lib/ai/builder-service';
 import mongoose from 'mongoose';
 
@@ -104,6 +104,15 @@ export async function POST(req: NextRequest) {
 
     // Generate with AI if requested
     if (generateWithAI && aiDescription) {
+      // For layout components (header/footer), fetch pages for navigation links
+      let pages: Array<{ name: string; path: string }> = [];
+      if (type === 'layout') {
+        const projectPages = await BuilderPage.find({
+          projectId: new mongoose.Types.ObjectId(projectId),
+        }).select('name path').lean();
+        pages = projectPages.map((p) => ({ name: p.name, path: p.path }));
+      }
+
       const result = await builderAIService.generateComponent({
         description: aiDescription,
         componentName: name,
@@ -114,6 +123,7 @@ export async function POST(req: NextRequest) {
           secondaryColor: project.settings?.secondaryColor || '#06b6d4',
           fontFamily: project.settings?.fontFamily || 'Inter',
         },
+        pages,
       });
 
       if (!result.isValid) {

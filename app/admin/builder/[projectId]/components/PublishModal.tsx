@@ -9,7 +9,7 @@ interface PublishModalProps {
 }
 
 export function PublishModal({ onClose }: PublishModalProps) {
-  const { project, pages, setProject } = useBuilderStore();
+  const { project, pages, components, setProject } = useBuilderStore();
 
   const [commitMessage, setCommitMessage] = useState('');
   const [isPublishing, setIsPublishing] = useState(false);
@@ -22,6 +22,7 @@ export function PublishModal({ onClose }: PublishModalProps) {
   } | null>(null);
 
   const pagesWithCode = pages.filter((p) => p.code && p.code.trim().length > 0);
+  const componentsWithCode = components.filter((c) => c.code && c.code.trim().length > 0);
 
   const handlePublish = async () => {
     if (!project || pagesWithCode.length === 0) return;
@@ -190,6 +191,33 @@ export function PublishModal({ onClose }: PublishModalProps) {
                         className="px-2 py-0.5 bg-zinc-700 text-zinc-300 text-xs rounded"
                       >
                         {page.name}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Components Summary */}
+              <div className="p-4 bg-zinc-800/50 rounded-lg">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm text-zinc-300">Components to publish:</span>
+                  <span className="text-sm text-white font-medium">
+                    {componentsWithCode.length} / {components.length}
+                  </span>
+                </div>
+
+                {componentsWithCode.length === 0 ? (
+                  <p className="text-sm text-zinc-500">
+                    No components created yet.
+                  </p>
+                ) : (
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {componentsWithCode.map((component) => (
+                      <span
+                        key={component._id}
+                        className="px-2 py-0.5 bg-purple-500/20 text-purple-300 text-xs rounded"
+                      >
+                        {component.name}
                       </span>
                     ))}
                   </div>

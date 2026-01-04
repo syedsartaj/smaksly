@@ -28,7 +28,10 @@ import {
   ExternalLink,
   Check,
   X,
+  Hammer,
+  Rocket,
 } from 'lucide-react';
+import Link from 'next/link';
 import { formatNumber, formatPrice } from '@/lib/utils';
 
 export interface WebsiteTableData {
@@ -46,6 +49,10 @@ export interface WebsiteTableData {
   turnaroundDays: number;
   country: string;
   createdAt: string;
+  gitRepo?: string;
+  vercelProjectName?: string;
+  customDomain?: string;
+  gscConnected?: boolean;
 }
 
 interface WebsitesTableProps {
@@ -249,6 +256,28 @@ export function WebsitesTable({
           >
             {row.original.doFollow ? 'DoFollow' : 'NoFollow'}
           </span>
+        ),
+      },
+      {
+        id: 'deployment',
+        header: 'Deployment',
+        cell: ({ row }) => (
+          <div className="flex items-center gap-2">
+            {row.original.gitRepo ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-900/30 px-2.5 py-0.5 text-xs font-medium text-emerald-400">
+                <Rocket className="h-3 w-3" />
+                Live
+              </span>
+            ) : (
+              <Link
+                href={`/admin/builder/new?websiteId=${row.original._id}`}
+                className="inline-flex items-center gap-1 rounded-full bg-purple-900/30 px-2.5 py-0.5 text-xs font-medium text-purple-400 hover:bg-purple-900/50"
+              >
+                <Hammer className="h-3 w-3" />
+                Build
+              </Link>
+            )}
+          </div>
         ),
       },
       {

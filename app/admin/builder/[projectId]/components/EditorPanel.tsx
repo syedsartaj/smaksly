@@ -13,8 +13,17 @@ interface EditorPanelProps {
 }
 
 export function EditorPanel({ onSelectionChange }: EditorPanelProps) {
-  const { code, currentPage, setCode } = useBuilderStore();
+  const { code, currentPage, currentComponent, setCode } = useBuilderStore();
   const editorRef = useRef<unknown>(null);
+
+  // Determine if we have something to edit
+  const hasContent = currentPage || currentComponent;
+  const fileName = currentPage
+    ? `${currentPage.name}.tsx`
+    : currentComponent
+    ? `${currentComponent.name}.tsx`
+    : 'No file selected';
+  const fileType = currentPage?.type || currentComponent?.type || null;
 
   const handleMount: OnMount = useCallback(
     (editor, monaco) => {
@@ -113,19 +122,23 @@ export function EditorPanel({ onSelectionChange }: EditorPanelProps) {
     <div className="h-full w-full bg-[#1e1e1e] flex flex-col">
       {/* Editor Header */}
       <div className="h-10 bg-zinc-900 border-b border-zinc-800 flex items-center px-4">
-        <span className="text-sm text-zinc-400">
-          {currentPage ? `${currentPage.name}.tsx` : 'No page selected'}
+        <span className={`text-sm ${currentComponent ? 'text-purple-400' : 'text-zinc-400'}`}>
+          {fileName}
         </span>
-        {currentPage?.type && (
-          <span className="ml-2 px-2 py-0.5 bg-zinc-800 text-zinc-500 text-xs rounded">
-            {currentPage.type}
+        {fileType && (
+          <span className={`ml-2 px-2 py-0.5 text-xs rounded ${
+            currentComponent
+              ? 'bg-purple-500/20 text-purple-400'
+              : 'bg-zinc-800 text-zinc-500'
+          }`}>
+            {fileType}
           </span>
         )}
       </div>
 
       {/* Monaco Editor */}
       <div className="flex-1">
-        {currentPage ? (
+        {hasContent ? (
           <Editor
             height="100%"
             language="typescript"
@@ -159,8 +172,8 @@ export function EditorPanel({ onSelectionChange }: EditorPanelProps) {
         ) : (
           <div className="h-full flex items-center justify-center text-zinc-500">
             <div className="text-center">
-              <p className="text-lg mb-2">No page selected</p>
-              <p className="text-sm">Select a page from the file tree to edit</p>
+              <p className="text-lg mb-2">No file selected</p>
+              <p className="text-sm">Select a page or component from the file tree to edit</p>
             </div>
           </div>
         )}

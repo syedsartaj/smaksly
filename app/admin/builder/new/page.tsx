@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Globe, RefreshCw, Palette, Type, FileText } from 'lucide-react';
 
 interface Website {
@@ -40,6 +40,8 @@ const COLOR_PRESETS = [
 
 export default function NewBuilderProjectPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const websiteIdFromUrl = searchParams.get('websiteId');
 
   const [websites, setWebsites] = useState<Website[]>([]);
   const [isLoadingWebsites, setIsLoadingWebsites] = useState(true);
@@ -57,15 +59,21 @@ export default function NewBuilderProjectPage() {
   const [siteDescription, setSiteDescription] = useState('');
   const [blogEnabled, setBlogEnabled] = useState(true);
 
-  // Fetch websites
+  // Fetch websites - include all statuses (not just active)
   useEffect(() => {
     async function fetchWebsites() {
       try {
-        const response = await fetch('/api/websites?limit=100&status=active');
+        // Fetch all websites regardless of status
+        const response = await fetch('/api/websites?limit=100');
         const data = await response.json();
 
         if (data.success) {
           setWebsites(data.data);
+
+          // Auto-select website from URL param
+          if (websiteIdFromUrl && data.data.some((w: Website) => w._id === websiteIdFromUrl)) {
+            setSelectedWebsiteId(websiteIdFromUrl);
+          }
         }
       } catch (error) {
         console.error('Error fetching websites:', error);
@@ -75,7 +83,7 @@ export default function NewBuilderProjectPage() {
     }
 
     fetchWebsites();
-  }, []);
+  }, [websiteIdFromUrl]);
 
   // Auto-fill when website is selected
   useEffect(() => {
@@ -193,29 +201,41 @@ export default function NewBuilderProjectPage() {
             </div>
           ) : websites.length === 0 ? (
             <div className="text-center py-8">
-              <p className="text-zinc-400 mb-4">No active websites found</p>
+              <p className="text-zinc-400 mb-4">No websites found</p>
               <button
                 type="button"
                 onClick={() => router.push('/admin/websites')}
-                className="text-emerald-500 hover:text-emerald-400"
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg"
               >
                 Create a website first
               </button>
             </div>
           ) : (
-            <select
-              value={selectedWebsiteId}
-              onChange={(e) => setSelectedWebsiteId(e.target.value)}
-              className="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-lg text-white focus:outline-none focus:border-emerald-500"
-              required
-            >
-              <option value="">Choose a website...</option>
-              {websites.map((website) => (
-                <option key={website._id} value={website._id}>
-                  {website.name} ({website.domain})
-                </option>
-              ))}
-            </select>
+            <div className="space-y-3">
+              <select
+                value={selectedWebsiteId}
+                onChange={(e) => setSelectedWebsiteId(e.target.value)}
+                className="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-lg text-white focus:outline-none focus:border-emerald-500"
+                required
+              >
+                <option value="">Choose a website...</option>
+                {websites.map((website) => (
+                  <option key={website._id} value={website._id}>
+                    {website.name} ({website.domain})
+                  </option>
+                ))}
+              </select>
+              <p className="text-sm text-zinc-500">
+                Don&apos;t see your website?{' '}
+                <button
+                  type="button"
+                  onClick={() => router.push('/admin/websites')}
+                  className="text-emerald-500 hover:text-emerald-400"
+                >
+                  Create a new website
+                </button>
+              </p>
+            </div>
           )}
         </div>
 

@@ -27,10 +27,16 @@ export function FileTree() {
     pages,
     components,
     currentPage,
+    currentComponent,
     setCurrentPage,
+    setCurrentComponent,
     addPage,
     deletePage,
+    addComponent,
+    deleteComponent,
     project,
+    setCode,
+    setOriginalCode,
   } = useBuilderStore();
 
   const [expandedSections, setExpandedSections] = useState({
@@ -42,7 +48,15 @@ export function FileTree() {
   const [newPagePath, setNewPagePath] = useState('');
   const [newPageType, setNewPageType] = useState<'static' | 'dynamic' | 'blog-listing' | 'blog-post'>('static');
   const [isCreating, setIsCreating] = useState(false);
-  const [contextMenu, setContextMenu] = useState<{ pageId: string; x: number; y: number } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ type: 'page' | 'component'; id: string; x: number; y: number } | null>(null);
+
+  // Component creation state
+  const [showNewComponentForm, setShowNewComponentForm] = useState(false);
+  const [newComponentName, setNewComponentName] = useState('');
+  const [newComponentType, setNewComponentType] = useState<'layout' | 'section' | 'element' | 'widget'>('layout');
+  const [newComponentDescription, setNewComponentDescription] = useState('');
+  const [generateWithAI, setGenerateWithAI] = useState(true);
+  const [isCreatingComponent, setIsCreatingComponent] = useState(false);
 
   const toggleSection = (section: 'pages' | 'components') => {
     setExpandedSections((prev) => ({
@@ -89,6 +103,72 @@ export function FileTree() {
     }
   };
 
+  const handleCreateComponent = async () => {
+    if (!newComponentName.trim() || !project) return;
+
+    // If generating with AI, require a description
+    if (generateWithAI && !newComponentDescription.trim()) {
+      alert('Please provide a description for AI generation');
+      return;
+    }
+
+    try {
+      setIsCreatingComponent(true);
+
+      const requestBody: Record<string, unknown> = {
+        projectId: project._id,
+        name: newComponentName.trim(),
+        type: newComponentType,
+      };
+
+      if (generateWithAI) {
+        requestBody.generateWithAI = true;
+        requestBody.aiDescription = newComponentDescription.trim();
+      } else {
+        requestBody.code = `// ${newComponentName} Component
+export default function ${newComponentName}() {
+  return (
+    <div>
+      {/* ${newComponentName} content */}
+    </div>
+  );
+}`;
+      }
+
+      const response = await fetch('/api/builder/components', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Add component to store and select it
+        addComponent(data.data);
+        handleSelectComponent(data.data);
+        setShowNewComponentForm(false);
+        setNewComponentName('');
+        setNewComponentDescription('');
+      } else {
+        alert(data.error || 'Failed to create component');
+      }
+    } catch (error) {
+      console.error('Error creating component:', error);
+      alert('Failed to create component');
+    } finally {
+      setIsCreatingComponent(false);
+    }
+  };
+
+  const handleSelectComponent = (component: BuilderComponent) => {
+    // Clear current page selection and switch to component editing
+    setCurrentPage(null);
+    setCurrentComponent(component);
+    setCode(component.code || '');
+    setOriginalCode(component.code || '');
+  };
+
   const handleDeletePage = async (pageId: string) => {
     if (!confirm('Are you sure you want to delete this page?')) return;
 
@@ -112,9 +192,32 @@ export function FileTree() {
     setContextMenu(null);
   };
 
-  const handleContextMenu = (e: React.MouseEvent, pageId: string) => {
+  const handleDeleteComponent = async (componentId: string) => {
+    if (!confirm('Are you sure you want to delete this component?')) return;
+
+    try {
+      const response = await fetch(`/api/builder/components/${componentId}`, {
+        method: 'DELETE',
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        deleteComponent(componentId);
+      } else {
+        alert(data.error || 'Failed to delete component');
+      }
+    } catch (error) {
+      console.error('Error deleting component:', error);
+      alert('Failed to delete component');
+    }
+
+    setContextMenu(null);
+  };
+
+  const handleContextMenu = (e: React.MouseEvent, type: 'page' | 'component', id: string) => {
     e.preventDefault();
-    setContextMenu({ pageId, x: e.clientX, y: e.clientY });
+    setContextMenu({ type, id, x: e.clientX, y: e.clientY });
   };
 
   // Close context menu on click outside
@@ -124,11 +227,11 @@ export function FileTree() {
 
   return (
     <div
-      className="h-full bg-zinc-900 border-r border-zinc-800 flex flex-col"
+      className="h-full w-full bg-zinc-900 flex flex-col overflow-hidden"
       onClick={handleClickOutside}
     >
       {/* Header */}
-      <div className="h-10 border-b border-zinc-800 flex items-center justify-between px-3">
+      <div className="h-10 border-b border-zinc-800 flex items-center justify-between px-3 flex-shrink-0">
         <span className="text-sm font-medium text-zinc-300">Files</span>
       </div>
 
@@ -173,7 +276,7 @@ export function FileTree() {
                   <button
                     key={page._id}
                     onClick={() => setCurrentPage(page)}
-                    onContextMenu={(e) => handleContextMenu(e, page._id)}
+                    onContextMenu={(e) => handleContextMenu(e, 'page', page._id)}
                     className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm transition-colors ${
                       isActive
                         ? 'bg-emerald-500/20 text-emerald-400'
@@ -245,11 +348,11 @@ export function FileTree() {
 
         {/* Components Section */}
         <div>
-          <button
-            onClick={() => toggleSection('components')}
-            className="w-full flex items-center justify-between px-3 py-1.5 text-sm text-zinc-400 hover:text-white hover:bg-zinc-800/50 transition-colors"
-          >
-            <div className="flex items-center gap-2">
+          <div className="w-full flex items-center justify-between px-3 py-1.5 text-sm text-zinc-400 hover:text-white hover:bg-zinc-800/50 transition-colors cursor-pointer">
+            <div
+              className="flex items-center gap-2 flex-1"
+              onClick={() => toggleSection('components')}
+            >
               {expandedSections.components ? (
                 <FolderOpen className="h-4 w-4" />
               ) : (
@@ -258,25 +361,120 @@ export function FileTree() {
               <span>Components</span>
               <span className="text-xs text-zinc-600">({components.length})</span>
             </div>
-          </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowNewComponentForm(true);
+              }}
+              className="p-1 hover:bg-zinc-700 rounded transition-colors"
+              title="Add Component"
+            >
+              <Plus className="h-3 w-3" />
+            </button>
+          </div>
 
           {expandedSections.components && (
             <div className="ml-4 border-l border-zinc-800">
-              {components.length === 0 ? (
+              {/* New Component Form */}
+              {showNewComponentForm && (
+                <div className="px-3 py-2 space-y-2 bg-zinc-800/50">
+                  <input
+                    type="text"
+                    placeholder="Component name (e.g., Header)"
+                    value={newComponentName}
+                    onChange={(e) => setNewComponentName(e.target.value)}
+                    className="w-full px-2 py-1 bg-zinc-700 border border-zinc-600 rounded text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500"
+                    autoFocus
+                  />
+                  <select
+                    value={newComponentType}
+                    onChange={(e) => setNewComponentType(e.target.value as typeof newComponentType)}
+                    className="w-full px-2 py-1 bg-zinc-700 border border-zinc-600 rounded text-sm text-white focus:outline-none focus:border-emerald-500"
+                  >
+                    <option value="layout">Layout (Header, Footer, Nav)</option>
+                    <option value="section">Section (Hero, Features)</option>
+                    <option value="element">Element (Button, Card)</option>
+                    <option value="widget">Widget (Newsletter, Social)</option>
+                  </select>
+
+                  {/* AI Generation Toggle */}
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={generateWithAI}
+                      onChange={(e) => setGenerateWithAI(e.target.checked)}
+                      className="w-4 h-4 rounded border-zinc-600 bg-zinc-700 text-purple-500 focus:ring-purple-500"
+                    />
+                    <span className="text-xs text-zinc-400">Generate with AI</span>
+                  </label>
+
+                  {/* AI Description */}
+                  {generateWithAI && (
+                    <textarea
+                      placeholder={
+                        newComponentType === 'layout' && newComponentName.toLowerCase().includes('header')
+                          ? "E.g., Modern sticky header with logo, navigation links (Home, About, Blog, Contact), mobile menu, and a CTA button"
+                          : newComponentType === 'layout' && newComponentName.toLowerCase().includes('footer')
+                          ? "E.g., Dark footer with company info, quick links, contact details, newsletter signup, and social icons"
+                          : "Describe the component you want to create..."
+                      }
+                      value={newComponentDescription}
+                      onChange={(e) => setNewComponentDescription(e.target.value)}
+                      rows={3}
+                      className="w-full px-2 py-1 bg-zinc-700 border border-zinc-600 rounded text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-purple-500 resize-none"
+                    />
+                  )}
+
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleCreateComponent}
+                      disabled={!newComponentName.trim() || isCreatingComponent || (generateWithAI && !newComponentDescription.trim())}
+                      className={`flex-1 px-2 py-1 text-white text-xs rounded transition-colors disabled:opacity-50 ${
+                        generateWithAI
+                          ? 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700'
+                          : 'bg-emerald-600 hover:bg-emerald-700'
+                      }`}
+                    >
+                      {isCreatingComponent ? 'Creating...' : generateWithAI ? '✨ Generate' : 'Create'}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowNewComponentForm(false);
+                        setNewComponentName('');
+                        setNewComponentDescription('');
+                      }}
+                      className="px-2 py-1 bg-zinc-700 hover:bg-zinc-600 text-zinc-300 text-xs rounded transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {components.length === 0 && !showNewComponentForm ? (
                 <div className="px-3 py-2 text-xs text-zinc-600">
                   No components yet
                 </div>
               ) : (
-                components.map((component: BuilderComponent) => (
-                  <button
-                    key={component._id}
-                    className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-zinc-400 hover:text-white hover:bg-zinc-800/50 transition-colors"
-                  >
-                    <FileCode className="h-4 w-4 flex-shrink-0" />
-                    <span className="truncate">{component.name}</span>
-                    <span className="text-xs text-zinc-600">{component.type}</span>
-                  </button>
-                ))
+                components.map((component: BuilderComponent) => {
+                  const isActive = currentComponent?._id === component._id;
+                  return (
+                    <button
+                      key={component._id}
+                      onClick={() => handleSelectComponent(component)}
+                      onContextMenu={(e) => handleContextMenu(e, 'component', component._id)}
+                      className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm transition-colors ${
+                        isActive
+                          ? 'bg-purple-500/20 text-purple-400'
+                          : 'text-zinc-400 hover:text-white hover:bg-zinc-800/50'
+                      }`}
+                    >
+                      <FileCode className="h-4 w-4 flex-shrink-0" />
+                      <span className="truncate flex-1 text-left">{component.name}</span>
+                      <span className="text-xs text-zinc-600">{component.type}</span>
+                    </button>
+                  );
+                })
               )}
             </div>
           )}
@@ -291,11 +489,14 @@ export function FileTree() {
           onClick={(e) => e.stopPropagation()}
         >
           <button
-            onClick={() => handleDeletePage(contextMenu.pageId)}
+            onClick={() => contextMenu.type === 'page'
+              ? handleDeletePage(contextMenu.id)
+              : handleDeleteComponent(contextMenu.id)
+            }
             className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-400 hover:bg-zinc-700 transition-colors"
           >
             <Trash2 className="h-4 w-4" />
-            Delete Page
+            Delete {contextMenu.type === 'page' ? 'Page' : 'Component'}
           </button>
         </div>
       )}

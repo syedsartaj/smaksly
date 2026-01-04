@@ -68,11 +68,17 @@ export interface CodeEditResult {
   errors: string[];
 }
 
+export interface PageInfo {
+  name: string;
+  path: string;
+}
+
 export interface ComponentGenerationParams {
   description: string;
   componentName: string;
   componentType: 'layout' | 'section' | 'element' | 'widget';
   projectSettings: ProjectSettings;
+  pages?: PageInfo[];
 }
 
 export interface ImprovementSuggestion {
@@ -202,7 +208,7 @@ export class BuilderAIService {
    * Generate a reusable component
    */
   async generateComponent(params: ComponentGenerationParams): Promise<PageGenerationResult> {
-    const { description, componentName, componentType, projectSettings } = params;
+    const { description, componentName, componentType, projectSettings, pages } = params;
 
     try {
       const userPrompt = createComponentGenerationPrompt({
@@ -210,6 +216,7 @@ export class BuilderAIService {
         componentName,
         componentType,
         projectSettings,
+        pages,
       });
 
       const completion = await getOpenAI().chat.completions.create({

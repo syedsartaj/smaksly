@@ -97,8 +97,8 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
 
-    // Validate required fields
-    const requiredFields = ['name', 'domain', 'niche', 'categoryId'];
+    // Validate required fields (categoryId is now optional)
+    const requiredFields = ['name', 'domain', 'niche'];
     for (const field of requiredFields) {
       if (!body[field]) {
         return NextResponse.json(
@@ -117,12 +117,25 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Validate categoryId format
-    if (!isValidObjectId(body.categoryId)) {
-      return NextResponse.json(
-        { success: false, error: 'Invalid category ID format' },
-        { status: 400 }
-      );
+    // Get or create default category if not provided
+    let categoryId = body.categoryId;
+    if (!categoryId || !isValidObjectId(categoryId)) {
+      // Import Category model dynamically to avoid circular dependency
+      const { Category } = await import('@/models');
+
+      // Try to find a default "General" category or create one
+      let defaultCategory = await Category.findOne({ slug: 'general' });
+      if (!defaultCategory) {
+        defaultCategory = await Category.create({
+          name: 'General',
+          slug: 'general',
+          description: 'General category for websites',
+          level: 0,
+          path: 'general',
+          isActive: true,
+        });
+      }
+      categoryId = defaultCategory._id.toString();
     }
 
     // Check if domain already exists
@@ -145,7 +158,7 @@ export async function POST(req: NextRequest) {
       domain,
       customDomain: body.customDomain,
       niche: sanitizedNiche,
-      categoryId: body.categoryId,
+      categoryId: categoryId,
       tags: Array.isArray(body.tags) ? body.tags.slice(0, 20).map((t: string) => sanitizeString(String(t)).substring(0, 50)) : [],
       description: sanitizedDescription,
       status: body.status || 'pending',

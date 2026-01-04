@@ -31,6 +31,7 @@ export default function BuilderWorkspace() {
   const {
     project,
     currentPage,
+    currentComponent,
     code,
     isDirty,
     isLoadingProjects,
@@ -41,7 +42,7 @@ export default function BuilderWorkspace() {
     toggleFileTree,
     toggleAIPanel,
     loadProject,
-    saveCurrentPage,
+    saveCurrentCode,
     generatePreview,
     setSelectedCode,
   } = useBuilderStore();
@@ -77,7 +78,7 @@ export default function BuilderWorkspace() {
     setSaveError(null);
 
     try {
-      const success = await saveCurrentPage();
+      const success = await saveCurrentCode();
       if (!success) {
         setSaveError('Failed to save');
       }
@@ -86,7 +87,7 @@ export default function BuilderWorkspace() {
     } finally {
       setIsSaving(false);
     }
-  }, [saveCurrentPage]);
+  }, [saveCurrentCode]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -169,6 +170,15 @@ export default function BuilderWorkspace() {
                 <span className="text-white">{currentPage.name}</span>
               </>
             )}
+            {currentComponent && (
+              <>
+                <span className="text-zinc-600 mx-2">/</span>
+                <span className="text-purple-400">{currentComponent.name}</span>
+                <span className="ml-2 text-xs bg-purple-500/20 text-purple-300 px-1.5 py-0.5 rounded">
+                  Component
+                </span>
+              </>
+            )}
           </div>
 
           {isDirty && (
@@ -187,7 +197,7 @@ export default function BuilderWorkspace() {
           {/* AI Generate Button */}
           <button
             onClick={() => setShowAIPromptModal(true)}
-            disabled={!currentPage || isGenerating}
+            disabled={(!currentPage && !currentComponent) || isGenerating}
             className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white text-sm rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Sparkles className="h-4 w-4" />
@@ -197,7 +207,7 @@ export default function BuilderWorkspace() {
           {/* AI Edit Button */}
           <button
             onClick={toggleAIPanel}
-            disabled={!currentPage || !code}
+            disabled={(!currentPage && !currentComponent) || !code}
             className={`flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg transition-colors ${
               showAIPanel
                 ? 'bg-purple-600 text-white'
@@ -251,35 +261,33 @@ export default function BuilderWorkspace() {
 
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
-        <PanelGroup orientation="horizontal">
-          {/* File Tree Panel */}
-          {showFileTree && (
-            <>
-              <Panel defaultSize={15} minSize={10} maxSize={25}>
-                <FileTree />
-              </Panel>
-              <PanelResizeHandle className="w-1 bg-zinc-800 hover:bg-zinc-700 transition-colors" />
-            </>
-          )}
+        {/* File Tree - Fixed width sidebar */}
+        {showFileTree && (
+          <div className="w-64 flex-shrink-0 border-r border-zinc-800">
+            <FileTree />
+          </div>
+        )}
 
+        {/* Editor and Preview Panels */}
+        <PanelGroup orientation="horizontal" className="flex-1">
           {/* Editor Panel */}
-          <Panel defaultSize={showAIPanel ? 35 : 50} minSize={30}>
+          <Panel defaultSize={showAIPanel ? 45 : 55} minSize={30}>
             <EditorPanel
               onSelectionChange={(selection) => setSelectedCode(selection)}
             />
           </Panel>
 
-          <PanelResizeHandle className="w-1 bg-zinc-800 hover:bg-zinc-700 transition-colors" />
+          <PanelResizeHandle className="w-2 bg-zinc-800 hover:bg-emerald-600 cursor-col-resize transition-colors" />
 
           {/* Preview Panel */}
-          <Panel defaultSize={showAIPanel ? 30 : 50} minSize={25}>
+          <Panel defaultSize={showAIPanel ? 35 : 45} minSize={25}>
             <PreviewPanel />
           </Panel>
 
           {/* AI Edit Panel */}
           {showAIPanel && (
             <>
-              <PanelResizeHandle className="w-1 bg-zinc-800 hover:bg-zinc-700 transition-colors" />
+              <PanelResizeHandle className="w-2 bg-zinc-800 hover:bg-emerald-600 cursor-col-resize transition-colors" />
               <Panel defaultSize={20} minSize={15} maxSize={35}>
                 <AIEditPanel onClose={toggleAIPanel} />
               </Panel>

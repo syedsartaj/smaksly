@@ -13,6 +13,11 @@ import {
   ExternalLink,
   ChevronDown,
   Zap,
+  Link2,
+  CheckCircle2,
+  AlertCircle,
+  Copy,
+  X,
 } from 'lucide-react';
 import {
   LineChart,
@@ -31,6 +36,7 @@ interface Website {
   _id: string;
   name: string;
   domain: string;
+  gscConnected?: boolean;
 }
 
 interface MetricData {
@@ -94,6 +100,9 @@ export default function SEODashboardPage() {
 
   // Active tab
   const [activeTab, setActiveTab] = useState<'overview' | 'keywords' | 'pages' | 'indexing'>('overview');
+
+  // GSC Connection Modal
+  const [showGSCModal, setShowGSCModal] = useState(false);
 
   // Fetch websites
   useEffect(() => {
@@ -226,6 +235,28 @@ export default function SEODashboardPage() {
               >
                 <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
                 Refresh
+              </button>
+
+              {/* Connect GSC Button */}
+              <button
+                onClick={() => setShowGSCModal(true)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg ${
+                  selectedWebsite?.gscConnected
+                    ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-600/50'
+                    : 'bg-blue-600 hover:bg-blue-700 text-white'
+                }`}
+              >
+                {selectedWebsite?.gscConnected ? (
+                  <>
+                    <CheckCircle2 className="h-4 w-4" />
+                    GSC Connected
+                  </>
+                ) : (
+                  <>
+                    <Link2 className="h-4 w-4" />
+                    Connect GSC
+                  </>
+                )}
               </button>
             </div>
           </div>
@@ -548,6 +579,24 @@ export default function SEODashboardPage() {
           </>
         )}
       </div>
+
+      {/* GSC Connection Modal */}
+      {showGSCModal && selectedWebsite && (
+        <GSCConnectionModal
+          website={selectedWebsite}
+          onClose={() => setShowGSCModal(false)}
+          onConnected={() => {
+            setShowGSCModal(false);
+            // Refresh websites to get updated gscConnected status
+            const updatedWebsites = websites.map((w) =>
+              w._id === selectedWebsite._id ? { ...w, gscConnected: true } : w
+            );
+            setWebsites(updatedWebsites);
+            setSelectedWebsite({ ...selectedWebsite, gscConnected: true });
+            fetchMetrics();
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -677,6 +726,234 @@ function IndexingTab({ websiteId, domain }: { websiteId: string; domain: string 
             Submit URLs to see indexing results
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+// GSC Connection Modal Component
+function GSCConnectionModal({
+  website,
+  onClose,
+  onConnected,
+}: {
+  website: Website;
+  onClose: () => void;
+  onConnected: () => void;
+}) {
+  const [currentStep, setCurrentStep] = useState(1);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [verifyError, setVerifyError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const serviceAccountEmail = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_EMAIL || 'smaksly-seo@your-project.iam.gserviceaccount.com';
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleVerifyConnection = async () => {
+    setIsVerifying(true);
+    setVerifyError(null);
+
+    try {
+      // Try to fetch metrics to verify connection
+      const res = await fetch(`/api/seo/metrics?websiteId=${website._id}&period=7d&dimension=date`);
+      const data = await res.json();
+
+      if (data.success) {
+        // Mark website as GSC connected
+        await fetch(`/api/websites/${website._id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ gscConnected: true }),
+        });
+        onConnected();
+      } else {
+        setVerifyError(data.error || 'Failed to verify connection. Please ensure you have added the service account to your property.');
+      }
+    } catch (error) {
+      setVerifyError('Failed to verify connection. Please try again.');
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
+  const steps = [
+    {
+      title: 'Open Google Search Console',
+      content: (
+        <div className="space-y-3">
+          <p className="text-zinc-300">
+            Go to Google Search Console and select your property:
+          </p>
+          <a
+            href={`https://search.google.com/search-console/users?resource_id=sc-domain:${website.domain.replace(/^https?:\/\//, '')}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 text-blue-400 hover:text-blue-300"
+          >
+            <ExternalLink className="h-4 w-4" />
+            Open Search Console for {website.domain}
+          </a>
+          <div className="p-3 bg-zinc-800 rounded-lg text-sm text-zinc-400">
+            <strong>Note:</strong> If your property is not verified yet, you&apos;ll need to verify it first using DNS verification or HTML file upload.
+          </div>
+        </div>
+      ),
+    },
+    {
+      title: 'Add Service Account User',
+      content: (
+        <div className="space-y-3">
+          <p className="text-zinc-300">
+            In Search Console, go to <strong>Settings → Users and permissions</strong> and add the following service account email as a <strong>Full</strong> user:
+          </p>
+          <div className="flex items-center gap-2 p-3 bg-zinc-800 rounded-lg">
+            <code className="flex-1 text-emerald-400 text-sm break-all">
+              {serviceAccountEmail}
+            </code>
+            <button
+              onClick={() => copyToClipboard(serviceAccountEmail)}
+              className="p-2 hover:bg-zinc-700 rounded transition-colors"
+              title="Copy to clipboard"
+            >
+              {copied ? (
+                <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+              ) : (
+                <Copy className="h-4 w-4 text-zinc-400" />
+              )}
+            </button>
+          </div>
+          <div className="p-3 bg-amber-900/20 border border-amber-800/50 rounded-lg text-sm text-amber-300">
+            <strong>Important:</strong> Make sure to select &quot;Full&quot; permission level, not &quot;Restricted&quot;.
+          </div>
+        </div>
+      ),
+    },
+    {
+      title: 'Verify Connection',
+      content: (
+        <div className="space-y-4">
+          <p className="text-zinc-300">
+            Once you&apos;ve added the service account, click below to verify the connection:
+          </p>
+
+          {verifyError && (
+            <div className="flex items-start gap-2 p-3 bg-red-900/20 border border-red-800/50 rounded-lg text-red-400 text-sm">
+              <AlertCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="font-medium">Connection Failed</p>
+                <p className="text-red-400/80">{verifyError}</p>
+              </div>
+            </div>
+          )}
+
+          <button
+            onClick={handleVerifyConnection}
+            disabled={isVerifying}
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg disabled:opacity-50"
+          >
+            {isVerifying ? (
+              <>
+                <RefreshCw className="h-5 w-5 animate-spin" />
+                Verifying...
+              </>
+            ) : (
+              <>
+                <CheckCircle2 className="h-5 w-5" />
+                Verify Connection
+              </>
+            )}
+          </button>
+
+          <p className="text-xs text-zinc-500 text-center">
+            It may take a few minutes for Google to grant access after adding the service account.
+          </p>
+        </div>
+      ),
+    },
+  ];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full max-w-2xl bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl m-4">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-blue-600 rounded-lg">
+              <Link2 className="h-5 w-5 text-white" />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold text-white">Connect Google Search Console</h2>
+              <p className="text-sm text-zinc-400">{website.domain}</p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-zinc-800 rounded-lg transition-colors"
+          >
+            <X className="h-5 w-5 text-zinc-400" />
+          </button>
+        </div>
+
+        {/* Steps */}
+        <div className="px-6 py-4 border-b border-zinc-800">
+          <div className="flex items-center gap-2">
+            {steps.map((step, index) => (
+              <div key={index} className="flex items-center">
+                <button
+                  onClick={() => setCurrentStep(index + 1)}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                    currentStep === index + 1
+                      ? 'bg-blue-600 text-white'
+                      : currentStep > index + 1
+                      ? 'bg-emerald-600/20 text-emerald-400'
+                      : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+                  }`}
+                >
+                  <span className="flex items-center justify-center w-5 h-5 rounded-full bg-current/20 text-xs">
+                    {currentStep > index + 1 ? '✓' : index + 1}
+                  </span>
+                  <span className="hidden sm:inline">{step.title}</span>
+                </button>
+                {index < steps.length - 1 && (
+                  <div className="w-8 h-px bg-zinc-700 mx-2" />
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="p-6">
+          <h3 className="text-lg font-medium text-white mb-4">
+            Step {currentStep}: {steps[currentStep - 1].title}
+          </h3>
+          {steps[currentStep - 1].content}
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-between px-6 py-4 border-t border-zinc-800">
+          <button
+            onClick={() => setCurrentStep((s) => Math.max(1, s - 1))}
+            disabled={currentStep === 1}
+            className="px-4 py-2 text-zinc-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Previous
+          </button>
+          {currentStep < steps.length ? (
+            <button
+              onClick={() => setCurrentStep((s) => Math.min(steps.length, s + 1))}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
+            >
+              Next Step
+            </button>
+          ) : null}
+        </div>
       </div>
     </div>
   );
