@@ -44,7 +44,7 @@ export type { ICategory } from './Category';
 
 // Website Builder
 export { BuilderProject } from './BuilderProject';
-export type { IBuilderProject, BuilderProjectStatus, IBuilderProjectSettings, IBuilderBlogConfig } from './BuilderProject';
+export type { IBuilderProject, BuilderProjectStatus, IBuilderProjectSettings, IBuilderBlogConfig, IBuilderProjectBranding } from './BuilderProject';
 
 export { BuilderPage } from './BuilderPage';
 export type { IBuilderPage, BuilderPageType, BuilderPageStatus, IAIConversationMessage, IPageVersion } from './BuilderPage';

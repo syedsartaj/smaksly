@@ -12,7 +12,9 @@ import {
   Settings,
   ChevronLeft,
   AlertCircle,
+  Image as ImageIcon,
 } from 'lucide-react';
+import Link from 'next/link';
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels';
 import { useBuilderStore } from '@/stores/useBuilderStore';
 import { EditorPanel } from './components/EditorPanel';
@@ -238,6 +240,16 @@ export default function BuilderWorkspace() {
             )}
             Save
           </button>
+
+          {/* Media Button */}
+          <Link
+            href={`/admin/builder/${projectId}/media`}
+            className="flex items-center gap-2 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-sm rounded-lg transition-colors"
+            title="Media Library"
+          >
+            <ImageIcon className="h-4 w-4" />
+            Media
+          </Link>
 
           {/* Settings Button */}
           <button

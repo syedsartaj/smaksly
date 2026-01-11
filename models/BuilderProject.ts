@@ -3,6 +3,14 @@ import mongoose, { Schema, Document, Model } from 'mongoose';
 export type BuilderProjectStatus = 'draft' | 'building' | 'ready' | 'published' | 'error';
 export type BlogLayoutType = 'grid' | 'list' | 'masonry';
 
+export interface IBuilderProjectBranding {
+  headerLogo?: string;
+  footerLogo?: string;
+  websiteIcon?: string;
+  indexName?: string;
+  logoAltText?: string;
+}
+
 export interface IBuilderProjectSettings {
   primaryColor: string;
   secondaryColor: string;
@@ -11,6 +19,7 @@ export interface IBuilderProjectSettings {
   siteDescription: string;
   favicon?: string;
   logo?: string;
+  branding?: IBuilderProjectBranding;
   socialLinks?: {
     twitter?: string;
     facebook?: string;
@@ -114,6 +123,13 @@ const BuilderProjectSchema = new Schema<IBuilderProject>(
       siteDescription: { type: String, default: '' },
       favicon: { type: String },
       logo: { type: String },
+      branding: {
+        headerLogo: { type: String },
+        footerLogo: { type: String },
+        websiteIcon: { type: String },
+        indexName: { type: String },
+        logoAltText: { type: String },
+      },
       socialLinks: {
         twitter: { type: String },
         facebook: { type: String },

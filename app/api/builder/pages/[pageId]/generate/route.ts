@@ -23,7 +23,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     }
 
     const body = await req.json();
-    const { description } = body;
+    const { description, mediaReferences } = body;
 
     if (!description || typeof description !== 'string' || description.trim().length === 0) {
       return NextResponse.json(
@@ -31,6 +31,12 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
         { status: 400 }
       );
     }
+
+    // Validate media references if provided
+    const validMediaRefs = mediaReferences?.filter(
+      (m: { url?: string; name?: string }) =>
+        m && typeof m.url === 'string' && typeof m.name === 'string'
+    ) || [];
 
     // Get page and project
     const page = await BuilderPage.findById(pageId);
@@ -68,6 +74,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
         secondaryColor: project.settings?.secondaryColor || '#06b6d4',
         fontFamily: project.settings?.fontFamily || 'Inter',
       },
+      mediaReferences: validMediaRefs,
     });
 
     if (!result.isValid) {

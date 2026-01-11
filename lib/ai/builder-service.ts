@@ -35,12 +35,19 @@ export interface ProjectSettings {
   fontFamily: string;
 }
 
+export interface MediaReference {
+  url: string;
+  name: string;
+  alt?: string;
+}
+
 export interface PageGenerationParams {
   description: string;
   pageType: 'static' | 'dynamic' | 'blog-listing' | 'blog-post';
   pagePath: string;
   existingComponents: string[];
   projectSettings: ProjectSettings;
+  mediaReferences?: MediaReference[];
 }
 
 export interface PageGenerationResult {
@@ -112,16 +119,30 @@ export class BuilderAIService {
    * Generate a complete page based on user description
    */
   async generatePage(params: PageGenerationParams): Promise<PageGenerationResult> {
-    const { description, pageType, pagePath, existingComponents, projectSettings } = params;
+    const { description, pageType, pagePath, existingComponents, projectSettings, mediaReferences } = params;
 
     try {
-      const userPrompt = createPageGenerationPrompt({
+      let userPrompt = createPageGenerationPrompt({
         description,
         pageType,
         pagePath,
         existingComponents,
         projectSettings,
       });
+
+      // Add media references to the prompt if available
+      if (mediaReferences && mediaReferences.length > 0) {
+        const mediaContext = `
+
+AVAILABLE IMAGES:
+The following images have been provided for use in this page. Use these exact URLs when the user's description mentions these images:
+${mediaReferences.map((m, i) => `${i + 1}. "${m.name}" - ${m.url}${m.alt ? ` (alt: ${m.alt})` : ''}`).join('\n')}
+
+When using these images, use the Image component with the exact URL provided. For example:
+<Image src="${mediaReferences[0]?.url || ''}" alt="${mediaReferences[0]?.alt || mediaReferences[0]?.name || 'Image'}" fill className="object-cover" />
+`;
+        userPrompt = userPrompt + mediaContext;
+      }
 
       const completion = await getOpenAI().chat.completions.create({
         model: this.model,

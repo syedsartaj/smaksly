@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { X, Sparkles, RefreshCw, Lightbulb } from 'lucide-react';
-import { useBuilderStore } from '@/stores/useBuilderStore';
+import { X, Sparkles, RefreshCw, Lightbulb, Image as ImageIcon } from 'lucide-react';
+import { useBuilderStore, BuilderMedia } from '@/stores/useBuilderStore';
+import MediaPickerInline from '@/components/builder/MediaPickerInline';
 
 interface AIPromptModalProps {
   onClose: () => void;
@@ -43,6 +44,7 @@ export function AIPromptModal({ onClose }: AIPromptModalProps) {
   const [isGenerating, setLocalIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
+  const [selectedMedia, setSelectedMedia] = useState<BuilderMedia[]>([]);
 
   const handleGenerate = async () => {
     if (!prompt.trim() || !currentPage) return;
@@ -53,10 +55,20 @@ export function AIPromptModal({ onClose }: AIPromptModalProps) {
       setError(null);
       setWarnings([]);
 
+      // Prepare media references for the AI
+      const mediaReferences = selectedMedia.map((m) => ({
+        url: m.url,
+        name: m.name,
+        alt: m.alt || '',
+      }));
+
       const response = await fetch(`/api/builder/pages/${currentPage._id}/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ description: prompt.trim() }),
+        body: JSON.stringify({
+          description: prompt.trim(),
+          mediaReferences: mediaReferences.length > 0 ? mediaReferences : undefined,
+        }),
       });
 
       const data = await response.json();
@@ -161,6 +173,28 @@ export function AIPromptModal({ onClose }: AIPromptModalProps) {
                 ' Mention how you want blog cards to look and what filters/features to include.'}
             </p>
           </div>
+
+          {/* Media Selection */}
+          {project && (
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <ImageIcon className="h-4 w-4 text-zinc-400" />
+                <label className="text-sm font-medium text-zinc-300">
+                  Attach Images (optional)
+                </label>
+              </div>
+              <MediaPickerInline
+                projectId={project._id}
+                selectedMedia={selectedMedia}
+                onSelect={setSelectedMedia}
+                maxItems={5}
+              />
+              <p className="mt-2 text-xs text-zinc-500">
+                Select images to use in this page. The AI will use these URLs in the generated code.
+                Mention how to use each image in your description (e.g., "use image1 as hero background").
+              </p>
+            </div>
+          )}
 
           {/* Error Message */}
           {error && (

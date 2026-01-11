@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { X, Sparkles, RefreshCw, Send, Code, Wand2 } from 'lucide-react';
-import { useBuilderStore } from '@/stores/useBuilderStore';
+import Image from 'next/image';
+import { X, Sparkles, RefreshCw, Send, Code, Wand2, ImagePlus, Loader2 } from 'lucide-react';
+import { useBuilderStore, BuilderMedia } from '@/stores/useBuilderStore';
 
 interface AIEditPanelProps {
   onClose: () => void;
@@ -35,6 +36,39 @@ export function AIEditPanel({ onClose }: AIEditPanelProps) {
   const [conversationHistory, setConversationHistory] = useState<
     Array<{ role: 'user' | 'assistant'; content: string }>
   >([]);
+  const [showMediaPicker, setShowMediaPicker] = useState(false);
+  const [availableMedia, setAvailableMedia] = useState<BuilderMedia[]>([]);
+  const [isLoadingMedia, setIsLoadingMedia] = useState(false);
+
+  const { project } = useBuilderStore();
+
+  const loadMedia = async () => {
+    if (!project) return;
+    setIsLoadingMedia(true);
+    try {
+      const response = await fetch(`/api/builder/media?projectId=${project._id}&limit=30`);
+      const data = await response.json();
+      if (data.success) {
+        setAvailableMedia(data.data.media);
+      }
+    } catch (error) {
+      console.error('Error loading media:', error);
+    }
+    setIsLoadingMedia(false);
+  };
+
+  const handleInsertImage = (media: BuilderMedia) => {
+    const insertText = `Use this image: ${media.url} `;
+    setInstruction((prev) => prev + insertText);
+    setShowMediaPicker(false);
+  };
+
+  const openMediaPicker = () => {
+    setShowMediaPicker(true);
+    if (availableMedia.length === 0) {
+      loadMedia();
+    }
+  };
 
   const handleEdit = async (editInstruction?: string) => {
     const instructionToUse = editInstruction || instruction.trim();
@@ -195,6 +229,15 @@ export function AIEditPanel({ onClose }: AIEditPanelProps) {
 
       {/* Input */}
       <div className="p-4 border-t border-zinc-800">
+        {/* Insert Image Button */}
+        <button
+          onClick={openMediaPicker}
+          className="mb-2 flex items-center gap-1.5 px-2 py-1 text-xs text-zinc-400 hover:text-white hover:bg-zinc-800 rounded transition-colors"
+        >
+          <ImagePlus className="h-3.5 w-3.5" />
+          Insert Image URL
+        </button>
+
         <div className="flex gap-2">
           <input
             type="text"
@@ -230,6 +273,56 @@ export function AIEditPanel({ onClose }: AIEditPanelProps) {
           Press Enter to apply or click the send button
         </p>
       </div>
+
+      {/* Media Picker Modal */}
+      {showMediaPicker && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
+          <div className="bg-zinc-900 rounded-xl w-full max-w-md mx-4 max-h-[60vh] overflow-hidden shadow-2xl border border-zinc-800">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800">
+              <h3 className="font-medium text-white text-sm">Insert Image URL</h3>
+              <button
+                onClick={() => setShowMediaPicker(false)}
+                className="p-1 rounded text-zinc-400 hover:text-white hover:bg-zinc-800"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="p-3 overflow-y-auto max-h-[45vh]">
+              {isLoadingMedia ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-5 w-5 animate-spin text-emerald-500" />
+                </div>
+              ) : availableMedia.length === 0 ? (
+                <div className="text-center py-8 text-zinc-500 text-sm">
+                  <ImagePlus className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                  <p>No images uploaded yet</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-4 gap-2">
+                  {availableMedia
+                    .filter((m) => m.type === 'image')
+                    .map((media) => (
+                      <button
+                        key={media._id}
+                        onClick={() => handleInsertImage(media)}
+                        className="aspect-square relative rounded-lg overflow-hidden border border-zinc-700 hover:border-emerald-500 transition-colors"
+                      >
+                        <Image
+                          src={media.url}
+                          alt={media.alt || media.name}
+                          fill
+                          className="object-cover"
+                          sizes="80px"
+                        />
+                      </button>
+                    ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -81,6 +81,41 @@ export interface CodeSelection {
   text: string;
 }
 
+export interface BuilderMedia {
+  _id: string;
+  projectId: string;
+  name: string;
+  originalName: string;
+  type: 'image' | 'font' | 'icon' | 'document' | 'video';
+  url: string;
+  publicId?: string;
+  thumbnailUrl?: string;
+  size: number;
+  mimeType: string;
+  dimensions?: { width: number; height: number };
+  alt?: string;
+  caption?: string;
+  category?: string;
+  tags?: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MediaCategory {
+  name: string;
+  count: number;
+}
+
+export interface BrandingSettings {
+  headerLogo?: string;
+  footerLogo?: string;
+  websiteIcon?: string;
+  indexName?: string;
+  logoAltText?: string;
+  siteName?: string;
+  siteDescription?: string;
+}
+
 // Store State
 interface BuilderState {
   // Project
@@ -120,6 +155,17 @@ interface BuilderState {
   // Publish
   isPublishing: boolean;
   publishError: string | null;
+
+  // Media
+  media: BuilderMedia[];
+  mediaCategories: MediaCategory[];
+  selectedMediaIds: Set<string>;
+  mediaViewMode: 'grid' | 'list';
+  mediaSearchTerm: string;
+  activeCategory: string;
+  isLoadingMedia: boolean;
+  isUploadingMedia: boolean;
+  branding: BrandingSettings;
 
   // Actions
   setProject: (project: BuilderProject | null) => void;
@@ -165,6 +211,22 @@ interface BuilderState {
   saveCurrentComponent: () => Promise<boolean>;
   saveCurrentCode: () => Promise<boolean>;
   generatePreview: () => Promise<void>;
+
+  // Media Actions
+  setMedia: (media: BuilderMedia[]) => void;
+  setMediaCategories: (categories: MediaCategory[]) => void;
+  setMediaViewMode: (mode: 'grid' | 'list') => void;
+  setMediaSearchTerm: (term: string) => void;
+  setActiveCategory: (category: string) => void;
+  toggleMediaSelection: (mediaId: string) => void;
+  clearMediaSelection: () => void;
+  setBranding: (branding: BrandingSettings) => void;
+  loadMedia: (projectId: string, options?: { category?: string; search?: string; page?: number }) => Promise<void>;
+  uploadMedia: (projectId: string, file: File, category?: string, alt?: string) => Promise<BuilderMedia | null>;
+  deleteMedia: (mediaId: string) => Promise<boolean>;
+  updateMedia: (mediaId: string, updates: Partial<BuilderMedia>) => Promise<boolean>;
+  loadBranding: (projectId: string) => Promise<void>;
+  saveBranding: (projectId: string, branding: BrandingSettings) => Promise<boolean>;
 }
 
 export const useBuilderStore = create<BuilderState>((set, get) => ({
@@ -198,6 +260,17 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
 
   isPublishing: false,
   publishError: null,
+
+  // Media
+  media: [],
+  mediaCategories: [],
+  selectedMediaIds: new Set<string>(),
+  mediaViewMode: 'grid',
+  mediaSearchTerm: '',
+  activeCategory: 'all',
+  isLoadingMedia: false,
+  isUploadingMedia: false,
+  branding: {},
 
   // Actions
   setProject: (project) => set({ project }),
@@ -457,6 +530,197 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
       });
     }
   },
+
+  // Media Actions
+  setMedia: (media) => set({ media }),
+  setMediaCategories: (mediaCategories) => set({ mediaCategories }),
+  setMediaViewMode: (mediaViewMode) => set({ mediaViewMode }),
+  setMediaSearchTerm: (mediaSearchTerm) => set({ mediaSearchTerm }),
+  setActiveCategory: (activeCategory) => set({ activeCategory }),
+  toggleMediaSelection: (mediaId) =>
+    set((state) => {
+      const newSelection = new Set(state.selectedMediaIds);
+      if (newSelection.has(mediaId)) {
+        newSelection.delete(mediaId);
+      } else {
+        newSelection.add(mediaId);
+      }
+      return { selectedMediaIds: newSelection };
+    }),
+  clearMediaSelection: () => set({ selectedMediaIds: new Set<string>() }),
+  setBranding: (branding) => set({ branding }),
+
+  loadMedia: async (projectId, options = {}) => {
+    try {
+      set({ isLoadingMedia: true });
+
+      const params = new URLSearchParams({ projectId });
+      if (options.category && options.category !== 'all') {
+        params.append('category', options.category);
+      }
+      if (options.search) {
+        params.append('search', options.search);
+      }
+      if (options.page) {
+        params.append('page', options.page.toString());
+      }
+
+      const response = await fetch(`/api/builder/media?${params}`);
+      const data = await response.json();
+
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to load media');
+      }
+
+      set({
+        media: data.data.media,
+        mediaCategories: data.data.categories,
+        isLoadingMedia: false,
+      });
+    } catch (error) {
+      console.error('Error loading media:', error);
+      set({ isLoadingMedia: false });
+    }
+  },
+
+  uploadMedia: async (projectId, file, category = 'general', alt = '') => {
+    try {
+      set({ isUploadingMedia: true });
+
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('projectId', projectId);
+      formData.append('category', category);
+      formData.append('alt', alt);
+
+      const response = await fetch('/api/builder/media', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to upload media');
+      }
+
+      // Add to media list
+      set((state) => ({
+        media: [data.data, ...state.media],
+        isUploadingMedia: false,
+      }));
+
+      // Reload to get updated categories
+      get().loadMedia(projectId, { category: get().activeCategory });
+
+      return data.data;
+    } catch (error) {
+      console.error('Error uploading media:', error);
+      set({ isUploadingMedia: false });
+      return null;
+    }
+  },
+
+  deleteMedia: async (mediaId) => {
+    try {
+      const response = await fetch(`/api/builder/media/${mediaId}`, {
+        method: 'DELETE',
+      });
+
+      const data = await response.json();
+
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to delete media');
+      }
+
+      // Remove from media list
+      set((state) => ({
+        media: state.media.filter((m) => m._id !== mediaId),
+        selectedMediaIds: new Set([...state.selectedMediaIds].filter((id) => id !== mediaId)),
+      }));
+
+      return true;
+    } catch (error) {
+      console.error('Error deleting media:', error);
+      return false;
+    }
+  },
+
+  updateMedia: async (mediaId, updates) => {
+    try {
+      const response = await fetch(`/api/builder/media/${mediaId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
+
+      const data = await response.json();
+
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to update media');
+      }
+
+      // Update in media list
+      set((state) => ({
+        media: state.media.map((m) => (m._id === mediaId ? { ...m, ...data.data } : m)),
+      }));
+
+      return true;
+    } catch (error) {
+      console.error('Error updating media:', error);
+      return false;
+    }
+  },
+
+  loadBranding: async (projectId) => {
+    try {
+      const response = await fetch(`/api/builder/projects/${projectId}/branding`);
+      const data = await response.json();
+
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to load branding');
+      }
+
+      set({
+        branding: {
+          ...data.data.branding,
+          siteName: data.data.siteName,
+          siteDescription: data.data.siteDescription,
+        },
+      });
+    } catch (error) {
+      console.error('Error loading branding:', error);
+    }
+  },
+
+  saveBranding: async (projectId, branding) => {
+    try {
+      const response = await fetch(`/api/builder/projects/${projectId}/branding`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(branding),
+      });
+
+      const data = await response.json();
+
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to save branding');
+      }
+
+      set({
+        branding: {
+          ...data.data.branding,
+          siteName: data.data.siteName,
+          siteDescription: data.data.siteDescription,
+        },
+      });
+
+      return true;
+    } catch (error) {
+      console.error('Error saving branding:', error);
+      return false;
+    }
+  },
 }));
 
 // Selectors
@@ -468,3 +732,12 @@ export const selectCode = (state: BuilderState) => state.code;
 export const selectIsDirty = (state: BuilderState) => state.isDirty;
 export const selectIsGenerating = (state: BuilderState) => state.isGenerating;
 export const selectPreviewHtml = (state: BuilderState) => state.previewHtml;
+
+// Media Selectors
+export const selectMedia = (state: BuilderState) => state.media;
+export const selectMediaCategories = (state: BuilderState) => state.mediaCategories;
+export const selectMediaViewMode = (state: BuilderState) => state.mediaViewMode;
+export const selectActiveCategory = (state: BuilderState) => state.activeCategory;
+export const selectIsLoadingMedia = (state: BuilderState) => state.isLoadingMedia;
+export const selectIsUploadingMedia = (state: BuilderState) => state.isUploadingMedia;
+export const selectBranding = (state: BuilderState) => state.branding;

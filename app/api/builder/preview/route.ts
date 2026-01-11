@@ -110,6 +110,16 @@ function generatePreviewHTML(
     secondaryColor?: string;
     fontFamily?: string;
     siteName?: string;
+    siteDescription?: string;
+    logo?: string;
+    favicon?: string;
+    branding?: {
+      headerLogo?: string;
+      footerLogo?: string;
+      websiteIcon?: string;
+      indexName?: string;
+      logoAltText?: string;
+    };
   }
 ): string {
   // Remove import statements as they won't work in browser
@@ -126,12 +136,25 @@ function generatePreviewHTML(
     siteName: projectSettings?.siteName || 'My Website',
   };
 
+  // Extract branding settings
+  const branding = {
+    headerLogo: projectSettings?.branding?.headerLogo || projectSettings?.logo || '',
+    footerLogo: projectSettings?.branding?.footerLogo || projectSettings?.branding?.headerLogo || projectSettings?.logo || '',
+    websiteIcon: projectSettings?.branding?.websiteIcon || projectSettings?.favicon || '',
+    siteName: projectSettings?.siteName || 'My Website',
+    siteDescription: projectSettings?.siteDescription || '',
+    logoAltText: projectSettings?.branding?.logoAltText || projectSettings?.siteName || 'Logo',
+    indexName: projectSettings?.branding?.indexName || projectSettings?.siteName || 'Home',
+  };
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Preview - ${settings.siteName}</title>
+  <title>${branding.indexName} - ${settings.siteName}</title>
+  <meta name="description" content="${branding.siteDescription}">
+  ${branding.websiteIcon ? `<link rel="icon" href="${branding.websiteIcon}" type="image/x-icon">` : ''}
 
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -193,6 +216,24 @@ function generatePreviewHTML(
   <div id="root"></div>
 
   <script>
+    // Site branding data - available globally
+    window.__SITE_BRANDING__ = ${JSON.stringify(branding)};
+
+    // SiteLogo component - renders the appropriate logo
+    const SiteLogo = ({ type = 'header', className = '', width, height, ...props }) => {
+      const branding = window.__SITE_BRANDING__;
+      const src = type === 'footer' ? branding.footerLogo : branding.headerLogo;
+      if (!src) return null;
+      return React.createElement('img', {
+        src,
+        alt: branding.logoAltText || branding.siteName,
+        className,
+        width,
+        height,
+        style: props.style || {},
+      });
+    };
+
     // Mock next/image component
     const Image = ({ src, alt, width, height, className, fill, ...props }) => {
       const style = fill ? { position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' } : {};

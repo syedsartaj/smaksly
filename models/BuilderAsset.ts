@@ -30,6 +30,7 @@ export interface IBuilderAsset extends Document {
 
   // Organization
   folder?: string;
+  category?: string;
   tags?: string[];
 
   // Usage Tracking
@@ -111,6 +112,12 @@ const BuilderAssetSchema = new Schema<IBuilderAsset>(
       type: String,
       trim: true,
     },
+    category: {
+      type: String,
+      trim: true,
+      default: 'general',
+      index: true,
+    },
     tags: [{
       type: String,
       trim: true,
@@ -134,6 +141,7 @@ const BuilderAssetSchema = new Schema<IBuilderAsset>(
 // Indexes
 BuilderAssetSchema.index({ projectId: 1, type: 1 });
 BuilderAssetSchema.index({ projectId: 1, folder: 1 });
+BuilderAssetSchema.index({ projectId: 1, category: 1 });
 BuilderAssetSchema.index({ projectId: 1, createdAt: -1 });
 
 // Text index for search
