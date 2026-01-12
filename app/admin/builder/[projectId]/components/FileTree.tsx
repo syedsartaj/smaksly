@@ -65,6 +65,20 @@ export function FileTree() {
     }));
   };
 
+  // Auto-populate name and path based on page type
+  const handlePageTypeChange = (type: 'static' | 'dynamic' | 'blog-listing' | 'blog-post') => {
+    setNewPageType(type);
+
+    // Auto-fill name and path for blog page types
+    if (type === 'blog-listing') {
+      if (!newPageName.trim()) setNewPageName('Blog');
+      if (!newPagePath.trim()) setNewPagePath('/blog');
+    } else if (type === 'blog-post') {
+      if (!newPageName.trim()) setNewPageName('Blog Post');
+      if (!newPagePath.trim()) setNewPagePath('/blog/[slug]');
+    }
+  };
+
   const handleCreatePage = async () => {
     if (!newPageName.trim() || !project) return;
 
@@ -313,7 +327,7 @@ export default function ${newComponentName}() {
                   />
                   <select
                     value={newPageType}
-                    onChange={(e) => setNewPageType(e.target.value as typeof newPageType)}
+                    onChange={(e) => handlePageTypeChange(e.target.value as typeof newPageType)}
                     className="w-full px-2 py-1 bg-zinc-700 border border-zinc-600 rounded text-sm text-white focus:outline-none focus:border-emerald-500"
                   >
                     <option value="static">Static Page</option>

@@ -10,7 +10,7 @@ interface BrandingSectionProps {
 }
 
 export default function BrandingSection({ projectId }: BrandingSectionProps) {
-  const { branding, saveBranding, loadBranding, media, loadMedia } = useBuilderStore();
+  const { branding, saveBranding, loadBranding, media, loadMedia, generatePreview } = useBuilderStore();
 
   const [formData, setFormData] = useState<BrandingSettings>({
     headerLogo: '',
@@ -42,8 +42,13 @@ export default function BrandingSection({ projectId }: BrandingSectionProps) {
 
   const handleSave = async () => {
     setIsSaving(true);
-    await saveBranding(projectId, formData);
+    const success = await saveBranding(projectId, formData);
     setIsSaving(false);
+
+    // Refresh preview with new branding
+    if (success) {
+      generatePreview();
+    }
   };
 
   const handleSelectMedia = (field: keyof BrandingSettings, url: string) => {

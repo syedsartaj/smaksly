@@ -17,10 +17,19 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Pre-process code to fix common AI mistakes before Babel
+    let preprocessedCode = code
+      // Fix malformed type annotations like "any BlogPost[]" -> "any[]"
+      .replace(/:\s*any\s+\w+\[\]/g, ': any[]')
+      // Remove TypeScript interface declarations before Babel
+      .replace(/interface\s+\w+\s*\{[\s\S]*?\}\s*/g, '')
+      // Remove TypeScript type declarations before Babel
+      .replace(/type\s+\w+\s*=[\s\S]*?;\s*/g, '');
+
     // Transpile TSX to JavaScript
     let transpiledCode: string;
     try {
-      const result = babel.transformSync(code, {
+      const result = babel.transformSync(preprocessedCode, {
         presets: [
           ['@babel/preset-react', { runtime: 'classic' }],
           ['@babel/preset-typescript', { isTSX: true, allExtensions: true }],
@@ -47,6 +56,7 @@ export async function POST(req: NextRequest) {
 
     // Fetch blog data if needed
     let blogData: unknown[] = [];
+    let singleBlog: unknown = null;
     if (
       projectId &&
       mongoose.Types.ObjectId.isValid(projectId) &&
@@ -57,31 +67,59 @@ export async function POST(req: NextRequest) {
       // Get project to find the websiteId
       const project = await BuilderProject.findById(projectId).lean();
       if (project?.websiteId) {
-        const blogs = await Content.find({
-          websiteId: project.websiteId,
-          status: 'published',
-        })
-          .sort({ publishedAt: -1 })
-          .limit(12)
-          .select('title slug excerpt featuredImage publishedAt authorName readingTime tags')
-          .lean();
+        if (pageType === 'blog-post') {
+          // Fetch a single blog post with full content for blog-post preview
+          const blog = await Content.findOne({
+            websiteId: project.websiteId,
+            status: 'published',
+          })
+            .sort({ publishedAt: -1 })
+            .select('title slug body excerpt featuredImage publishedAt authorName authorBio readingTime tags')
+            .lean();
 
-        blogData = blogs.map((blog) => ({
-          _id: blog._id.toString(),
-          title: blog.title,
-          slug: blog.slug,
-          excerpt: blog.excerpt || '',
-          featuredImage: blog.featuredImage || '/placeholder.svg',
-          publishedAt: blog.publishedAt?.toISOString() || new Date().toISOString(),
-          authorName: blog.authorName || 'Admin',
-          readingTime: blog.readingTime || 5,
-          tags: blog.tags || [],
-        }));
+          if (blog) {
+            singleBlog = {
+              _id: blog._id.toString(),
+              title: blog.title,
+              slug: blog.slug,
+              body: blog.body || '<p>No content available</p>',
+              excerpt: blog.excerpt || '',
+              featuredImage: blog.featuredImage || '/placeholder.svg',
+              publishedAt: blog.publishedAt?.toISOString() || new Date().toISOString(),
+              authorName: blog.authorName || 'Admin',
+              authorBio: blog.authorBio || '',
+              readingTime: blog.readingTime || 5,
+              tags: blog.tags || [],
+            };
+          }
+        } else {
+          // Fetch blog list for blog-listing preview
+          const blogs = await Content.find({
+            websiteId: project.websiteId,
+            status: 'published',
+          })
+            .sort({ publishedAt: -1 })
+            .limit(12)
+            .select('title slug excerpt featuredImage publishedAt authorName readingTime tags')
+            .lean();
+
+          blogData = blogs.map((blog) => ({
+            _id: blog._id.toString(),
+            title: blog.title,
+            slug: blog.slug,
+            excerpt: blog.excerpt || '',
+            featuredImage: blog.featuredImage || '/placeholder.svg',
+            publishedAt: blog.publishedAt?.toISOString() || new Date().toISOString(),
+            authorName: blog.authorName || 'Admin',
+            readingTime: blog.readingTime || 5,
+            tags: blog.tags || [],
+          }));
+        }
       }
     }
 
     // Generate preview HTML
-    const previewHtml = generatePreviewHTML(transpiledCode, blogData, projectSettings);
+    const previewHtml = generatePreviewHTML(transpiledCode, blogData, singleBlog, projectSettings);
 
     return NextResponse.json({
       success: true,
@@ -105,6 +143,7 @@ export async function POST(req: NextRequest) {
 function generatePreviewHTML(
   jsCode: string,
   blogData: unknown[],
+  singleBlog: unknown,
   projectSettings?: {
     primaryColor?: string;
     secondaryColor?: string;
@@ -127,7 +166,9 @@ function generatePreviewHTML(
     .replace(/import\s+.*?from\s+['"][^'"]+['"];?\n?/g, '')
     .replace(/import\s+['"][^'"]+['"];?\n?/g, '')
     .replace(/export\s+default\s+/g, 'const Page = ')
-    .replace(/export\s+/g, 'const ');
+    .replace(/export\s+/g, 'const ')
+    // Remove hardcoded blogs array to use injected data from database
+    .replace(/const\s+blogs\s*=\s*\[[\s\S]*?\];\s*/g, '// blogs injected from database\n');
 
   const settings = {
     primaryColor: projectSettings?.primaryColor || '#10b981',
@@ -323,8 +364,10 @@ function generatePreviewHTML(
     const Plus = createIcon('Plus');
     const Minus = createIcon('Minus');
 
-    // Blog data
+    // Blog data - for blog-listing pages (array of blogs)
     const blogs = ${JSON.stringify(blogData)};
+    // Single blog data - for blog-post pages (single blog object)
+    const blog = ${JSON.stringify(singleBlog)};
 
     // Placeholder for useState hook (for client components)
     const { useState, useEffect, useCallback, useMemo, useRef } = React;
@@ -332,9 +375,9 @@ function generatePreviewHTML(
     try {
       ${cleanedCode}
 
-      // Render the component
+      // Render the component with both blogs array and single blog
       const root = ReactDOM.createRoot(document.getElementById('root'));
-      root.render(React.createElement(typeof Page !== 'undefined' ? Page : (() => React.createElement('div', { className: 'p-4' }, 'No component found')), { blogs: blogs }));
+      root.render(React.createElement(typeof Page !== 'undefined' ? Page : (() => React.createElement('div', { className: 'p-4' }, 'No component found')), { blogs: blogs, blog: blog }));
     } catch (error) {
       console.error('Preview render error:', error);
       document.getElementById('root').innerHTML = '<div style="padding: 20px; color: red; font-family: monospace;"><h2>Preview Error</h2><pre>' + error.message + '</pre></div>';

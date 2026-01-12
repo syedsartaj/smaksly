@@ -37,8 +37,13 @@ const PROMPT_SUGGESTIONS = [
 ];
 
 export function AIPromptModal({ onClose }: AIPromptModalProps) {
-  const { currentPage, project, setCode, updatePage, setIsGenerating, generatePreview } =
+  const { currentPage, currentComponent, project, setCode, updatePage, updateComponent, setIsGenerating, generatePreview } =
     useBuilderStore();
+
+  // Determine if we're generating for a page or component
+  const isComponentMode = !currentPage && !!currentComponent;
+  const targetName = isComponentMode ? currentComponent?.name : currentPage?.name;
+  const targetType = isComponentMode ? currentComponent?.type : currentPage?.type;
 
   const [prompt, setPrompt] = useState(currentPage?.aiPrompt || '');
   const [isGenerating, setLocalIsGenerating] = useState(false);
@@ -47,7 +52,8 @@ export function AIPromptModal({ onClose }: AIPromptModalProps) {
   const [selectedMedia, setSelectedMedia] = useState<BuilderMedia[]>([]);
 
   const handleGenerate = async () => {
-    if (!prompt.trim() || !currentPage) return;
+    if (!prompt.trim()) return;
+    if (!currentPage && !currentComponent) return;
 
     try {
       setLocalIsGenerating(true);
@@ -55,32 +61,54 @@ export function AIPromptModal({ onClose }: AIPromptModalProps) {
       setError(null);
       setWarnings([]);
 
-      // Prepare media references for the AI
-      const mediaReferences = selectedMedia.map((m) => ({
-        url: m.url,
-        name: m.name,
-        alt: m.alt || '',
-      }));
+      let response;
 
-      const response = await fetch(`/api/builder/pages/${currentPage._id}/generate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          description: prompt.trim(),
-          mediaReferences: mediaReferences.length > 0 ? mediaReferences : undefined,
-        }),
-      });
+      if (isComponentMode && currentComponent) {
+        // Generate component
+        response = await fetch(`/api/builder/components/${currentComponent._id}/generate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            description: prompt.trim(),
+          }),
+        });
+      } else if (currentPage) {
+        // Prepare media references for the AI
+        const mediaReferences = selectedMedia.map((m) => ({
+          url: m.url,
+          name: m.name,
+          alt: m.alt || '',
+        }));
+
+        response = await fetch(`/api/builder/pages/${currentPage._id}/generate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            description: prompt.trim(),
+            mediaReferences: mediaReferences.length > 0 ? mediaReferences : undefined,
+          }),
+        });
+      } else {
+        return;
+      }
 
       const data = await response.json();
 
       if (data.success) {
         // Update the code in the store
         setCode(data.data.code);
-        updatePage(currentPage._id, {
-          code: data.data.code,
-          aiPrompt: prompt.trim(),
-          status: 'generated',
-        });
+
+        if (isComponentMode && currentComponent) {
+          updateComponent(currentComponent._id, {
+            code: data.data.code,
+          });
+        } else if (currentPage) {
+          updatePage(currentPage._id, {
+            code: data.data.code,
+            aiPrompt: prompt.trim(),
+            status: 'generated',
+          });
+        }
 
         if (data.data.warnings?.length > 0) {
           setWarnings(data.data.warnings);
@@ -98,14 +126,14 @@ export function AIPromptModal({ onClose }: AIPromptModalProps) {
           }, 500);
         }
       } else {
-        setError(data.error || 'Failed to generate page');
+        setError(data.error || `Failed to generate ${isComponentMode ? 'component' : 'page'}`);
         if (data.errors) {
           setError(`${data.error}: ${data.errors.join(', ')}`);
         }
       }
     } catch (error) {
-      console.error('Error generating page:', error);
-      setError('Failed to generate page. Please try again.');
+      console.error(`Error generating ${isComponentMode ? 'component' : 'page'}:`, error);
+      setError(`Failed to generate ${isComponentMode ? 'component' : 'page'}. Please try again.`);
     } finally {
       setLocalIsGenerating(false);
       setIsGenerating(false);
@@ -126,9 +154,11 @@ export function AIPromptModal({ onClose }: AIPromptModalProps) {
               <Sparkles className="h-5 w-5 text-white" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-white">Generate Page with AI</h2>
+              <h2 className="text-lg font-semibold text-white">
+                Generate {isComponentMode ? 'Component' : 'Page'} with AI
+              </h2>
               <p className="text-sm text-zinc-400">
-                Describe the page you want to create
+                Describe the {isComponentMode ? 'component' : 'page'} you want to create
               </p>
             </div>
           </div>
@@ -142,14 +172,20 @@ export function AIPromptModal({ onClose }: AIPromptModalProps) {
 
         {/* Content */}
         <div className="flex-1 overflow-auto p-6 space-y-6">
-          {/* Current Page Info */}
-          {currentPage && (
+          {/* Current Target Info */}
+          {(currentPage || currentComponent) && (
             <div className="flex items-center gap-2 text-sm">
               <span className="text-zinc-500">Generating for:</span>
-              <span className="text-white font-medium">{currentPage.name}</span>
-              <span className="text-zinc-600">({currentPage.path})</span>
-              <span className="px-2 py-0.5 bg-zinc-800 text-zinc-400 text-xs rounded">
-                {currentPage.type}
+              <span className="text-white font-medium">{targetName}</span>
+              {currentPage && (
+                <span className="text-zinc-600">({currentPage.path})</span>
+              )}
+              <span className={`px-2 py-0.5 text-xs rounded ${
+                isComponentMode
+                  ? 'bg-purple-500/20 text-purple-300'
+                  : 'bg-zinc-800 text-zinc-400'
+              }`}>
+                {targetType}
               </span>
             </div>
           )}
@@ -157,12 +193,14 @@ export function AIPromptModal({ onClose }: AIPromptModalProps) {
           {/* Prompt Input */}
           <div>
             <label className="block text-sm font-medium text-zinc-300 mb-2">
-              Page Description
+              {isComponentMode ? 'Component' : 'Page'} Description
             </label>
             <textarea
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
-              placeholder="Describe the page you want to create. Be specific about sections, layout, features, and any specific content..."
+              placeholder={isComponentMode
+                ? "Describe the component you want to create. For headers, mention logo placement, navigation style, colors..."
+                : "Describe the page you want to create. Be specific about sections, layout, features, and any specific content..."}
               rows={5}
               className="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-purple-500 resize-none"
               disabled={isGenerating}
@@ -171,11 +209,15 @@ export function AIPromptModal({ onClose }: AIPromptModalProps) {
               Tip: The more detailed your description, the better the result.
               {currentPage?.type === 'blog-listing' &&
                 ' Mention how you want blog cards to look and what filters/features to include.'}
+              {isComponentMode && currentComponent?.name.toLowerCase().includes('header') &&
+                ' The header will use your site logo from branding settings.'}
+              {isComponentMode && currentComponent?.name.toLowerCase().includes('footer') &&
+                ' The footer will use your site logo from branding settings.'}
             </p>
           </div>
 
-          {/* Media Selection */}
-          {project && (
+          {/* Media Selection - Only for pages */}
+          {!isComponentMode && project && (
             <div>
               <div className="flex items-center gap-2 mb-3">
                 <ImageIcon className="h-4 w-4 text-zinc-400" />
@@ -191,7 +233,7 @@ export function AIPromptModal({ onClose }: AIPromptModalProps) {
               />
               <p className="mt-2 text-xs text-zinc-500">
                 Select images to use in this page. The AI will use these URLs in the generated code.
-                Mention how to use each image in your description (e.g., "use image1 as hero background").
+                Mention how to use each image in your description (e.g., &quot;use image1 as hero background&quot;).
               </p>
             </div>
           )}
@@ -266,7 +308,7 @@ export function AIPromptModal({ onClose }: AIPromptModalProps) {
             ) : (
               <>
                 <Sparkles className="h-4 w-4" />
-                Generate Page
+                Generate {isComponentMode ? 'Component' : 'Page'}
               </>
             )}
           </button>

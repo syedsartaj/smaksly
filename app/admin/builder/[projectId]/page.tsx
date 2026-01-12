@@ -44,6 +44,7 @@ export default function BuilderWorkspace() {
     toggleFileTree,
     toggleAIPanel,
     loadProject,
+    loadBranding,
     saveCurrentCode,
     generatePreview,
     setSelectedCode,
@@ -55,14 +56,16 @@ export default function BuilderWorkspace() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  // Load project on mount
+  // Load project and branding on mount
   useEffect(() => {
     if (projectId) {
-      loadProject(projectId).catch((error) => {
-        console.error('Failed to load project:', error);
-      });
+      loadProject(projectId)
+        .then(() => loadBranding(projectId))
+        .catch((error) => {
+          console.error('Failed to load project:', error);
+        });
     }
-  }, [projectId, loadProject]);
+  }, [projectId, loadProject, loadBranding]);
 
   // Generate preview when code changes (debounced)
   useEffect(() => {

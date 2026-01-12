@@ -16,6 +16,7 @@ export async function GET(
     const content = await Content.findById(id)
       .populate('websiteId', 'name domain')
       .populate('keywordId', 'keyword volume difficulty')
+      .populate('categoryId', 'name slug')
       .lean();
 
     if (!content) {
@@ -96,7 +97,8 @@ export async function PUT(
 
     const content = await Content.findByIdAndUpdate(id, updateData, { new: true })
       .populate('websiteId', 'name domain')
-      .populate('keywordId', 'keyword volume difficulty');
+      .populate('keywordId', 'keyword volume difficulty')
+      .populate('categoryId', 'name slug');
 
     return NextResponse.json({
       success: true,

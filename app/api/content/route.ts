@@ -17,6 +17,10 @@ export async function GET(req: NextRequest) {
     const search = searchParams.get('search');
     const sortBy = searchParams.get('sortBy') || 'createdAt';
     const sortOrder = searchParams.get('sortOrder') || 'desc';
+    const authorName = searchParams.get('authorName');
+    const categoryId = searchParams.get('categoryId');
+    const startDate = searchParams.get('startDate');
+    const endDate = searchParams.get('endDate');
 
     const query: Record<string, unknown> = {};
 
@@ -39,6 +43,24 @@ export async function GET(req: NextRequest) {
       ];
     }
 
+    if (authorName) {
+      query.authorName = { $regex: authorName, $options: 'i' };
+    }
+
+    if (categoryId) {
+      query.categoryId = new mongoose.Types.ObjectId(categoryId);
+    }
+
+    if (startDate || endDate) {
+      query.createdAt = {};
+      if (startDate) {
+        (query.createdAt as Record<string, Date>).$gte = new Date(startDate);
+      }
+      if (endDate) {
+        (query.createdAt as Record<string, Date>).$lte = new Date(endDate);
+      }
+    }
+
     const sortOptions: Record<string, 1 | -1> = {};
     sortOptions[sortBy] = sortOrder === 'desc' ? -1 : 1;
 
@@ -51,6 +73,7 @@ export async function GET(req: NextRequest) {
         .limit(limit)
         .populate('websiteId', 'name domain')
         .populate('keywordId', 'keyword volume')
+        .populate('categoryId', 'name slug')
         .lean(),
       Content.countDocuments(query),
     ]);

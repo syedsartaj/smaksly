@@ -3,6 +3,22 @@ import { connectDB } from '@/lib/db';
 import { Content, BuilderProject } from '@/models';
 import mongoose from 'mongoose';
 
+// Generate dummy blogs when no real blogs exist
+function generateDummyBlogs(count: number) {
+  return Array.from({ length: count }, (_, i) => ({
+    _id: `dummy-${i + 1}`,
+    title: `Sample Blog Post ${i + 1}`,
+    slug: `sample-blog-post-${i + 1}`,
+    excerpt: 'This is a sample blog post. Add your real content through the admin panel at /admin/post.',
+    featuredImage: '/placeholder.svg',
+    publishedAt: new Date(Date.now() - i * 24 * 60 * 60 * 1000).toISOString(),
+    authorName: 'Admin',
+    readingTime: 5,
+    tags: ['sample', 'placeholder'],
+    category: { name: 'General', slug: 'general' },
+  }));
+}
+
 // GET - Fetch blogs for a builder project (used by preview and generated sites)
 export async function GET(req: NextRequest) {
   try {
@@ -88,6 +104,23 @@ export async function GET(req: NextRequest) {
         .lean(),
       Content.countDocuments(query),
     ]);
+
+    // Return dummy data if no blogs exist (for preview purposes)
+    if (blogs.length === 0 && total === 0) {
+      const dummyBlogs = generateDummyBlogs(6);
+      return NextResponse.json({
+        success: true,
+        data: dummyBlogs,
+        pagination: {
+          page: 1,
+          limit: 6,
+          total: 6,
+          totalPages: 1,
+          hasMore: false,
+        },
+        isDummy: true,
+      });
+    }
 
     const formattedBlogs = blogs.map((blog) => ({
       _id: blog._id.toString(),

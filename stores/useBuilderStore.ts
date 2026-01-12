@@ -20,6 +20,13 @@ export interface BuilderProject {
     siteDescription: string;
     logo?: string;
     favicon?: string;
+    branding?: {
+      headerLogo?: string;
+      footerLogo?: string;
+      websiteIcon?: string;
+      indexName?: string;
+      logoAltText?: string;
+    };
   };
   blogConfig: {
     enabled: boolean;
@@ -492,7 +499,7 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
   },
 
   generatePreview: async () => {
-    const { code, project, currentPage } = get();
+    const { code, project, currentPage, branding } = get();
 
     if (!code || !project) {
       return;
@@ -508,7 +515,11 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
           code,
           projectId: project._id,
           pageType: currentPage?.type || 'static',
-          projectSettings: project.settings,
+          projectSettings: {
+            ...project.settings,
+            // Merge branding from store state (updated after saveBranding)
+            branding: branding || project.settings?.branding,
+          },
         }),
       });
 
@@ -707,6 +718,7 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
         throw new Error(data.error || 'Failed to save branding');
       }
 
+      // Update branding state
       set({
         branding: {
           ...data.data.branding,
@@ -714,6 +726,21 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
           siteDescription: data.data.siteDescription,
         },
       });
+
+      // Also update project.settings so preview uses the new branding
+      set((state) => ({
+        project: state.project ? {
+          ...state.project,
+          settings: {
+            ...state.project.settings,
+            branding: data.data.branding,
+            logo: data.data.branding?.headerLogo || state.project.settings?.logo,
+            favicon: data.data.branding?.websiteIcon || state.project.settings?.favicon,
+            siteName: data.data.siteName || state.project.settings?.siteName,
+            siteDescription: data.data.siteDescription || state.project.settings?.siteDescription,
+          }
+        } : null
+      }));
 
       return true;
     } catch (error) {

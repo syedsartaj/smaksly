@@ -86,38 +86,43 @@ BLOG POST DETAIL:
 NOTE: Do NOT include Header or Footer - they are in the Layout component
 
 BLOG DATA FOR PAGES:
-For blog listing and blog post pages, use MOCK DATA directly in the component (not props).
-DO NOT use Props interface for pages - Next.js App Router pages cannot receive custom props.
+For BLOG LISTING pages, the component receives a 'blogs' prop with data from the database.
+DO NOT create hardcoded const blogs = [...] arrays with mock data.
+DO NOT use TypeScript interfaces or type annotations - use plain JavaScript.
 
-For blog listing pages, create mock data like this:
-\`\`\`typescript
-const blogs = [
-  {
-    _id: '1',
-    title: 'Getting Started with Next.js',
-    slug: 'getting-started-nextjs',
-    excerpt: 'Learn how to build modern web applications with Next.js...',
-    featuredImage: '/placeholder.svg',
-    publishedAt: new Date().toISOString(),
-    authorName: 'Admin',
-    readingTime: 5,
-    tags: ['nextjs', 'react'],
-  },
-  // Add 5-6 more mock blog posts
-];
-\`\`\`
-
-For blog post detail pages with dynamic routes [slug], use:
-\`\`\`typescript
-interface PageProps {
-  params: Promise<{ slug: string }>;
-}
-
-export default async function BlogPost({ params }: PageProps) {
-  const { slug } = await params;
-  // Use mock data for the blog post
+Blog listing page structure (use this EXACT format):
+\`\`\`javascript
+export default function Blogs({ blogs = [] }) {
+  return (
+    <main>
+      {blogs.map((blog) => (
+        <article key={blog._id}>
+          {/* blog.title, blog.slug, blog.excerpt, blog.featuredImage, blog.publishedAt, blog.authorName, blog.readingTime, blog.tags */}
+        </article>
+      ))}
+    </main>
+  );
 }
 \`\`\`
+
+For blog post detail pages, use plain JavaScript without TypeScript:
+\`\`\`javascript
+export default function BlogPost({ blog = {} }) {
+  if (!blog._id) {
+    return <main className="p-8 text-center">Blog post not found</main>;
+  }
+
+  return (
+    <main>
+      <h1>{blog.title}</h1>
+      <p>By {blog.authorName} | {blog.readingTime} min read</p>
+      <img src={blog.featuredImage} alt={blog.title} />
+      <div dangerouslySetInnerHTML={{ __html: blog.body }} />
+    </main>
+  );
+}
+\`\`\`
+The blog prop contains: _id, title, slug, body, excerpt, featuredImage, publishedAt, authorName, authorBio, readingTime, tags
 
 OUTPUT FORMAT:
 Return ONLY the component code. No explanations, no markdown code blocks, just the raw TSX code.
@@ -148,19 +153,36 @@ This is a BLOG LISTING page. Requirements:
 - Include pagination or "load more" functionality placeholder
 - Add category/tag filters if appropriate
 - Make blog cards clickable (link to /blog/[slug])
-- The component receives 'blogs' prop with BlogPost[] data`;
+
+CRITICAL - Use this EXACT function signature (copy it exactly):
+\`\`\`
+export default function Blogs({ blogs = [] }) {
+\`\`\`
+- DO NOT add TypeScript type annotations to the function parameters
+- DO NOT create interface or type declarations
+- DO NOT create hardcoded const blogs = [...] with mock data
+- The blogs prop is an array with: _id, title, slug, excerpt, featuredImage, publishedAt, authorName, readingTime, tags
+- Map over the blogs prop to render posts`;
       break;
 
     case 'blog-post':
       pageTypeInstructions = `
-This is a BLOG POST template page. Requirements:
-- This is a dynamic route page for /blog/[slug]
+This is a BLOG POST detail page for dynamic route /blog/[slug]. Requirements:
 - Display: title, featured image, author info, publish date, reading time
-- Render the blog content (assume HTML content in 'body' prop)
-- Include social share buttons
+- Render the blog content from blog.body (HTML content)
+- Include social share buttons placeholder
 - Add related posts section placeholder
 - Include author bio section
-- The component receives the full blog post data as props`;
+
+CRITICAL - Use this EXACT function signature (copy it exactly):
+\`\`\`
+export default function BlogPost({ blog = {} }) {
+\`\`\`
+- DO NOT add TypeScript type annotations
+- DO NOT create interface or type declarations
+- The blog prop contains: _id, title, slug, body (HTML content), excerpt, featuredImage, publishedAt, authorName, authorBio, readingTime, tags
+- Use dangerouslySetInnerHTML to render blog.body HTML content
+- Show a "Blog post not found" message if blog is empty`;
       break;
 
     case 'static':
@@ -250,7 +272,10 @@ export const createComponentGenerationPrompt = (params: {
     specialInstructions = `
 NAVIGATION/HEADER SPECIFIC REQUIREMENTS:
 - Use 'use client' for mobile menu toggle state
-- Include logo placeholder (next/image with siteName fallback text)
+- LOGO: Use the SiteLogo component for branding (automatically reads from site settings):
+  <SiteLogo type="header" className="h-8 w-auto" />
+  If logo is not available, show siteName text as fallback:
+  {typeof SiteLogo !== 'undefined' ? <SiteLogo type="header" className="h-8 w-auto" /> : <span className="text-xl font-bold">{siteName}</span>}
 - Use next/link for navigation links - CRITICAL for proper routing
 - Mobile hamburger menu with slide-in or dropdown
 - Sticky header with blur backdrop (fixed top-0 w-full)
@@ -276,7 +301,11 @@ import Link from 'next/link';
 - Example structure:
   <header className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-md border-b">
     <nav className="container mx-auto px-4 py-4 flex items-center justify-between">
-      {/* Logo */} {/* Desktop Nav */} {/* Mobile Menu Button */}
+      {/* Logo using SiteLogo */}
+      <Link href="/">
+        {typeof SiteLogo !== 'undefined' ? <SiteLogo type="header" className="h-8 w-auto" /> : <span className="text-xl font-bold">{siteName}</span>}
+      </Link>
+      {/* Desktop Nav */} {/* Mobile Menu Button */}
     </nav>
     {/* Mobile Menu Overlay */}
   </header>
@@ -289,7 +318,11 @@ import Link from 'next/link';
     specialInstructions = `
 FOOTER SPECIFIC REQUIREMENTS:
 - Multi-column grid layout (4 columns on lg, 2 on md, 1 on mobile)
-- Column 1: Company info, logo, brief description
+- Column 1: Company info with logo and brief description
+  LOGO: Use the SiteLogo component for branding (automatically reads from site settings):
+  <SiteLogo type="footer" className="h-8 w-auto" />
+  If logo is not available, show siteName text as fallback:
+  {typeof SiteLogo !== 'undefined' ? <SiteLogo type="footer" className="h-8 w-auto" /> : <span className="text-xl font-bold">{siteName}</span>}
 - Column 2: Quick Links - USE THESE EXACT LINKS:
   ${footerLinks}
 - Column 3: Contact Info (address, phone, email with icons)
@@ -312,7 +345,12 @@ interface FooterProps {
   <footer className="bg-zinc-900 text-white">
     <div className="container mx-auto px-4 py-12">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-        {/* Columns */}
+        {/* Column 1 - Logo */}
+        <div>
+          {typeof SiteLogo !== 'undefined' ? <SiteLogo type="footer" className="h-8 w-auto mb-4" /> : <span className="text-xl font-bold">{siteName}</span>}
+          <p className="text-zinc-400">Company description...</p>
+        </div>
+        {/* More columns */}
       </div>
     </div>
     <div className="border-t border-zinc-800 py-6">
