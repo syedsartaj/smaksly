@@ -3,7 +3,11 @@ import jwt from 'jsonwebtoken';
 import { connectDB } from '@/lib/db';
 import { User, Partner } from '@/models';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+function getJWTSecret(): string {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) throw new Error('JWT_SECRET environment variable is required');
+  return secret;
+}
 
 interface JWTPayload {
   userId: string;
@@ -28,7 +32,7 @@ export async function GET(req: NextRequest) {
     // Verify token
     let decoded: JWTPayload;
     try {
-      decoded = jwt.verify(token, JWT_SECRET) as JWTPayload;
+      decoded = jwt.verify(token, getJWTSecret()) as JWTPayload;
     } catch {
       return NextResponse.json(
         { success: false, error: 'Invalid or expired token' },

@@ -1,10 +1,12 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 
 export default function SignupPage() {
+  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -62,13 +64,13 @@ export default function SignupPage() {
       const data = await res.json();
       if (res.ok) {
         setMessage('success:Account created successfully! Redirecting to login...');
-        setTimeout(() => (window.location.href = '/login'), 1500);
+        router.push('/login');
       } else {
         setMessage(data.error || 'Signup failed. Please try again.');
+        setIsLoading(false);
       }
     } catch (error) {
       setMessage('Network error. Please check your connection.');
-    } finally {
       setIsLoading(false);
     }
   };

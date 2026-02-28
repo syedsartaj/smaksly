@@ -57,7 +57,9 @@ export default function PartnerLayout({
     } else {
       setLoading(false);
     }
-  }, [pathname, isPublicPage]);
+    // Only fetch session once on mount, not on every pathname change
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPublicPage]);
 
   const fetchSession = async () => {
     try {

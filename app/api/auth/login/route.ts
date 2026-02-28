@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { connectToDatabase } from '@/lib/mongo';
-import User from '@/models/Client';
-import { isValidEmail, sanitizeString, checkRateLimit } from '@/lib/security';
+import Client from '@/models/Client';
+import { isValidEmail, checkRateLimit } from '@/lib/security';
 
 export async function POST(req: NextRequest) {
   try {
@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const email = sanitizeString(body.email || '').toLowerCase();
+    const email = (body.email || '').trim().toLowerCase();
     const password = body.password || '';
 
     // Validate inputs
@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
     }
 
     await connectToDatabase();
-    const user = await User.findOne({ email: email.toLowerCase() });
+    const user = await Client.findOne({ email });
 
     // Use constant-time comparison message to prevent user enumeration
     if (!user || !user.password) {
@@ -43,14 +43,21 @@ export async function POST(req: NextRequest) {
     const isMatch = await bcrypt.compare(password, user.password);
 
     if (!isMatch) {
+      // Add same artificial delay as user-not-found case to prevent timing attacks
+      await new Promise(resolve => setTimeout(resolve, 100));
       return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 });
     }
 
     // Don't return sensitive data like password hash
     return NextResponse.json({
+      success: true,
       message: 'Login successful',
-      user: { email: user.email, role: user.role || 'user' },
-      ok: true
+      user: {
+        id: user._id.toString(),
+        email: user.email,
+        name: user.email.split('@')[0],
+        role: 'admin',
+      },
     });
   } catch (error: any) {
     console.error('Login error:', error);

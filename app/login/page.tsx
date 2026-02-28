@@ -1,10 +1,14 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
+import { useAuthStore } from '@/stores/useAuthStore';
 
 export default function LoginPage() {
+  const router = useRouter();
+  const login = useAuthStore((s) => s.login);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [message, setMessage] = useState('');
@@ -37,14 +41,22 @@ export default function LoginPage() {
       const data = await res.json();
       if (res.ok) {
         setMessage('success:Logged in successfully! Redirecting...');
-        localStorage.setItem('userEmail', data.user.email);
-        setTimeout(() => (window.location.href = '/admin/dashboard'), 1000);
+        login(
+          {
+            id: data.user.id,
+            email: data.user.email,
+            name: data.user.name,
+            role: data.user.role || 'admin',
+          },
+          data.user.id
+        );
+        router.push('/admin/dashboard');
       } else {
         setMessage(data.error || 'Login failed. Please try again.');
+        setIsLoading(false);
       }
     } catch (error) {
       setMessage('Network error. Please check your connection.');
-    } finally {
       setIsLoading(false);
     }
   };

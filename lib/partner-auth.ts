@@ -3,7 +3,11 @@ import jwt from 'jsonwebtoken';
 import { connectDB } from '@/lib/db';
 import { User, Partner } from '@/models';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+function getJWTSecret(): string {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) throw new Error('JWT_SECRET environment variable is required');
+  return secret;
+}
 
 export interface PartnerSession {
   userId: string;
@@ -35,7 +39,7 @@ export async function getPartnerSession(req: NextRequest): Promise<PartnerSessio
     }
 
     // Verify token
-    const decoded = jwt.verify(token, JWT_SECRET) as {
+    const decoded = jwt.verify(token, getJWTSecret()) as {
       userId: string;
       partnerId: string;
       email: string;

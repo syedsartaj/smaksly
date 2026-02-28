@@ -13,6 +13,9 @@ export const QUEUE_NAMES = {
   EMAIL_NOTIFICATION: 'email-notification',
   COMMISSION_CALCULATION: 'commission-calculation',
   SEARCH_INDEX_SYNC: 'search-index-sync',
+  HEALTH_CHECK: 'health-check',
+  AUTO_FIX: 'auto-fix',
+  DEPLOY: 'deploy',
 } as const;
 
 // Job types
@@ -163,6 +166,21 @@ export const addJob = {
   searchIndexSync: async (data: SearchIndexSyncJob, options?: { delay?: number; priority?: number }) => {
     const queue = getQueue<SearchIndexSyncJob>(QUEUE_NAMES.SEARCH_INDEX_SYNC);
     return queue.add('sync', data, options);
+  },
+
+  healthCheck: async (data: { websiteId: string; runAutoFix?: boolean }, options?: { delay?: number; priority?: number }) => {
+    const queue = getQueue<typeof data>(QUEUE_NAMES.HEALTH_CHECK);
+    return queue.add('check', data, options);
+  },
+
+  autoFix: async (data: { type: 'single' | 'site'; issueId?: string; websiteId?: string }, options?: { delay?: number; priority?: number }) => {
+    const queue = getQueue<typeof data>(QUEUE_NAMES.AUTO_FIX);
+    return queue.add('fix', data, options);
+  },
+
+  deploy: async (data: { websiteId: string; action: 'deploy' | 'sitemap' | 'full' }, options?: { delay?: number; priority?: number }) => {
+    const queue = getQueue<typeof data>(QUEUE_NAMES.DEPLOY);
+    return queue.add('deploy', data, options);
   },
 };
 

@@ -54,3 +54,11 @@ export type { IBuilderComponent, BuilderComponentType, BuilderComponentScope } f
 
 export { BuilderAsset } from './BuilderAsset';
 export type { IBuilderAsset, BuilderAssetType } from './BuilderAsset';
+
+// Health Reports
+export { HealthReport } from './HealthReport';
+export type { IHealthReport } from './HealthReport';
+
+// Issues
+export { Issue } from './Issue';
+export type { IIssue, IssueType, IssueSeverity, IssueStatus } from './Issue';

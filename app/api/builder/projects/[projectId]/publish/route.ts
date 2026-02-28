@@ -224,7 +224,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
             console.log('Created new Vercel project:', vercelProjectId);
 
             // Trigger initial deployment for newly created project
-            await triggerVercelDeployment(repoName, vercelProjectId);
+            await triggerVercelDeployment(repoName!, vercelProjectId!);
           } else {
             const errorData = await createProjectResponse.json();
             console.error('Failed to create Vercel project:', errorData);
@@ -238,7 +238,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     }
 
     // Always trigger deployment if we have a Vercel project
-    if (vercelProjectId && VERCEL_TOKEN) {
+    if (vercelProjectId && repoName && VERCEL_TOKEN) {
       await triggerVercelDeployment(repoName, vercelProjectId);
     }
 

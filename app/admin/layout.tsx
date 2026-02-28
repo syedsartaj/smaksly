@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
+import { useAuthStore } from '@/stores/useAuthStore';
 import {
   LayoutDashboard,
   Globe,
@@ -130,8 +131,36 @@ export default function AdminLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { user, isAuthenticated, logout } = useAuthStore();
+  const [hydrated, setHydrated] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
+
+  // Wait for Zustand to hydrate from localStorage
+  useEffect(() => {
+    setHydrated(true);
+  }, []);
+
+  // Redirect to login if not authenticated after hydration
+  useEffect(() => {
+    if (hydrated && !isAuthenticated) {
+      router.push('/login');
+    }
+  }, [hydrated, isAuthenticated, router]);
+
+  const handleLogout = () => {
+    logout();
+    router.push('/login');
+  };
+
+  if (!hydrated || !isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-400"></div>
+      </div>
+    );
+  }
 
   const toggleExpanded = (name: string) => {
     setExpandedItems((prev) =>
@@ -255,16 +284,19 @@ export default function AdminLayout({
         <div className="border-t border-zinc-800 p-4">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-full bg-zinc-800 flex items-center justify-center text-zinc-400 shrink-0">
-              A
+              {user?.name?.charAt(0).toUpperCase() || 'A'}
             </div>
             {isSidebarOpen && (
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-white truncate">Admin</p>
-                <p className="text-xs text-zinc-500 truncate">admin@smaksly.com</p>
+                <p className="text-sm font-medium text-white truncate">{user?.name || 'Admin'}</p>
+                <p className="text-xs text-zinc-500 truncate">{user?.email || ''}</p>
               </div>
             )}
             {isSidebarOpen && (
-              <button className="p-2 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800">
+              <button
+                onClick={handleLogout}
+                className="p-2 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800"
+              >
                 <LogOut className="h-4 w-4" />
               </button>
             )}

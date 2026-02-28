@@ -9,7 +9,7 @@ interface Category {
   slug: string;
 }
 
-interface BlogFormData {
+export interface BlogFormData {
   title: string;
   slug: string;
   excerpt: string;

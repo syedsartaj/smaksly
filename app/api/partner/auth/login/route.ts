@@ -3,9 +3,13 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { connectDB } from '@/lib/db';
 import { User, Partner } from '@/models';
-import { isValidEmail, sanitizeString, checkRateLimit } from '@/lib/security';
+import { isValidEmail, checkRateLimit } from '@/lib/security';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+function getJWTSecret(): string {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) throw new Error('JWT_SECRET environment variable is required');
+  return secret;
+}
 const JWT_EXPIRES_IN = '7d';
 
 export async function POST(req: NextRequest) {
@@ -24,7 +28,7 @@ export async function POST(req: NextRequest) {
     await connectDB();
 
     const body = await req.json();
-    const email = sanitizeString(body.email || '').toLowerCase();
+    const email = (body.email || '').trim().toLowerCase();
     const password = body.password || '';
 
     // Validate inputs
@@ -103,11 +107,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Update last login
-    await Promise.all([
+    // Update last login (fire-and-forget, don't block the response)
+    Promise.all([
       User.findByIdAndUpdate(user._id, { lastLoginAt: new Date() }),
       Partner.findByIdAndUpdate(partner._id, { lastLoginAt: new Date() }),
-    ]);
+    ]).catch((err) => console.error('Failed to update lastLoginAt:', err));
 
     // Generate JWT token
     const token = jwt.sign(
@@ -117,7 +121,7 @@ export async function POST(req: NextRequest) {
         email: user.email,
         role: user.role,
       },
-      JWT_SECRET,
+      getJWTSecret(),
       { expiresIn: JWT_EXPIRES_IN }
     );
 

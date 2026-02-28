@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { connectToDatabase } from '@/lib/mongo';
 import Client from '@/models/Client';
-import { isValidEmail, isValidPassword, sanitizeString, checkRateLimit } from '@/lib/security';
+import { isValidEmail, isValidPassword, checkRateLimit } from '@/lib/security';
 
 export async function POST(req: NextRequest) {
   try {
@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const email = sanitizeString(body.email || '').toLowerCase();
+    const email = (body.email || '').trim().toLowerCase();
     const password = body.password || '';
 
     // Validate email
@@ -54,6 +54,7 @@ export async function POST(req: NextRequest) {
 
     // Don't return the full client object with password hash
     return NextResponse.json({
+      success: true,
       message: 'Signup successful',
       user: { email: newClient.email }
     });

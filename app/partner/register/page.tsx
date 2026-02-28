@@ -79,10 +79,10 @@ export default function PartnerRegisterPage() {
 
       setSuccess(true);
 
-      // Redirect to login after 3 seconds
+      // Redirect to login after 1 second
       setTimeout(() => {
         router.push('/partner/login');
-      }, 3000);
+      }, 1000);
     } catch {
       setError('An error occurred. Please try again.');
     } finally {

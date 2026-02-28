@@ -5,7 +5,7 @@ import { Plus, FileText, Trash2, ChevronLeft, ChevronRight } from 'lucide-react'
 import WebsiteSidebar from './components/WebsiteSidebar';
 import BlogFilters from './components/BlogFilters';
 import BlogTable, { BlogData } from './components/BlogTable';
-import BlogFormModal from './components/BlogFormModal';
+import BlogFormModal, { type BlogFormData } from './components/BlogFormModal';
 import DeleteConfirmModal from './components/DeleteConfirmModal';
 
 interface Website {
@@ -167,7 +167,7 @@ export default function PostManagement() {
   }, [selectedWebsiteId]);
 
   // Handle create/edit blog
-  const handleSubmitBlog = async (formData: Record<string, unknown>) => {
+  const handleSubmitBlog = async (formData: BlogFormData) => {
     const url = editBlog ? `/api/content/${editBlog._id}` : '/api/content';
     const method = editBlog ? 'PUT' : 'POST';
 

@@ -188,3 +188,9 @@ export type {
   CommissionCalculationJob,
   SearchIndexSyncJob,
 } from '../lib/queue';
+
+// SEO Automation Types
+export * from './keyword';
+export * from './content';
+export * from './health';
+export * from './issue';
