@@ -81,42 +81,13 @@ export async function triggerVercelDeploy(siteId: string): Promise<{ deploymentI
   return { deploymentId: deployData.id, url: `https://${deployData.url}`, status: deployData.readyState };
 }
 
-export async function regenerateSitemap(siteId: string): Promise<string> {
-  await connectDB();
-  const website = await Website.findById(siteId);
-  if (!website) throw new Error(`Website not found: ${siteId}`);
-
-  const domain = website.customDomain || website.domain;
-  const baseUrl = domain.startsWith('http') ? domain : `https://${domain}`;
-
-  const contents = await Content.find({ websiteId: website._id, status: 'published' })
-    .select('slug updatedAt type').sort({ publishedAt: -1 }).lean();
-
-  const urls = [
-    `  <url>\n    <loc>${baseUrl}</loc>\n    <changefreq>daily</changefreq>\n    <priority>1.0</priority>\n  </url>`,
-    `  <url>\n    <loc>${baseUrl}/blog</loc>\n    <changefreq>daily</changefreq>\n    <priority>0.8</priority>\n  </url>`,
-    ...contents.map((c) => {
-      const prefix = c.type === 'page' || c.type === 'landing_page' ? '' : '/blog';
-      return `  <url>\n    <loc>${baseUrl}${prefix}/${c.slug}</loc>\n    <lastmod>${new Date(c.updatedAt).toISOString().slice(0, 10)}</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>0.7</priority>\n  </url>`;
-    }),
-  ];
-
-  const sitemap = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join('\n')}\n</urlset>`;
-
-  await commitMarkdownToGithub(siteId, 'public/sitemap.xml', sitemap, 'chore: regenerate sitemap');
-  return sitemap;
-}
-
 export async function deployArticle(siteId: string, contentId: string, markdownContent: string, slug: string) {
   const { sha } = await commitMarkdownToGithub(siteId, `content/blog/${slug}.md`, markdownContent, `feat: add article "${slug}"`);
   await connectDB();
   await Content.findByIdAndUpdate(contentId, { status: 'published', publishedAt: new Date() });
 
-  let sitemapUpdated = false;
-  try { await regenerateSitemap(siteId); sitemapUpdated = true; } catch (e) { console.error('[DeployService] Sitemap failed:', e); }
-
   const deployment = await triggerVercelDeploy(siteId);
   await Website.findByIdAndUpdate(siteId, { lastContentPublishedAt: new Date() });
 
-  return { commitSha: sha, deploymentId: deployment.deploymentId, sitemapUpdated };
+  return { commitSha: sha, deploymentId: deployment.deploymentId };
 }

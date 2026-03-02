@@ -254,9 +254,11 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 
     // Set Vercel environment variables (needed for blog API calls at build time)
     if (vercelProjectId && VERCEL_TOKEN) {
+      const siteUrl = project.deploymentUrl || `https://${repoName}.vercel.app`;
       const envVars = [
         { key: 'NEXT_PUBLIC_SMAKSLY_API', value: process.env.NEXT_PUBLIC_SITE_URL || 'https://smaksly.com', target: ['production', 'preview', 'development'] },
         { key: 'NEXT_PUBLIC_PROJECT_ID', value: project._id.toString(), target: ['production', 'preview', 'development'] },
+        { key: 'NEXT_PUBLIC_SITE_URL', value: siteUrl, target: ['production', 'preview', 'development'] },
       ];
       for (const envVar of envVars) {
         try {
@@ -1017,8 +1019,41 @@ export async function getBlogBySlug(slug: string): Promise<BlogPost | null> {
     return null;
   }
 }
+
+export interface SitemapPage {
+  path: string;
+  type: string;
+  updatedAt: string;
+}
+
+export async function getPages(): Promise<SitemapPage[]> {
+  try {
+    const res = await fetch(
+      \`\${SMAKSLY_API}/api/builder/pages/sitemap?projectId=\${PROJECT_ID}\`,
+      { next: { revalidate: 60 } }
+    );
+
+    if (!res.ok) {
+      return [];
+    }
+
+    const data = await res.json();
+    return data.data || [];
+  } catch (error) {
+    console.error('Error fetching pages:', error);
+    return [];
+  }
+}
 `;
   await fs.writeFile(path.join(projectPath, 'lib', 'api.ts'), apiClientCode);
+
+  // Generate app/sitemap.ts - fully dynamic sitemap (pages + blogs fetched via API with ISR)
+  const sitemapCode = generateSitemapCode(project, pages, isMultiLang, projectLanguages, defaultLanguage);
+  await fs.writeFile(path.join(projectPath, 'app', 'sitemap.ts'), sitemapCode);
+
+  // Generate app/robots.ts
+  const robotsCode = generateRobotsCode();
+  await fs.writeFile(path.join(projectPath, 'app', 'robots.ts'), robotsCode);
 
   // Generate placeholder.svg
   const placeholderSvg = `<svg width="800" height="600" xmlns="http://www.w3.org/2000/svg">
@@ -1067,8 +1102,142 @@ NEXT_PUBLIC_PROJECT_ID=${project._id}
 
   // Generate .env with actual values (NEXT_PUBLIC_ vars are safe to commit - needed at build time)
   const smakslyApi = process.env.NEXT_PUBLIC_SITE_URL || 'https://smaksly.com';
+  const siteDeployUrl = project.deploymentUrl || '';
   const envFile = `NEXT_PUBLIC_SMAKSLY_API=${smakslyApi}
 NEXT_PUBLIC_PROJECT_ID=${project._id}
+NEXT_PUBLIC_SITE_URL=${siteDeployUrl}
 `;
   await fs.writeFile(path.join(projectPath, '.env'), envFile);
+}
+
+// Generate dynamic sitemap.ts for the published Next.js project
+function generateSitemapCode(
+  project: InstanceType<typeof BuilderProject>,
+  pages: Array<Record<string, unknown>>,
+  isMultiLang: boolean,
+  projectLanguages: Array<{ code: string; direction: string; name: string }>,
+  defaultLanguage: string
+): string {
+  const hasBlogPages = pages.some(
+    (p) => p.code && (p.code as string).trim().length > 0 && ((p.type as string) === 'blog-listing' || (p.type as string) === 'blog-post')
+  );
+  const langCodes = projectLanguages.map((l) => l.code);
+
+  if (isMultiLang) {
+    return `import { MetadataRoute } from 'next';
+import { getPages${hasBlogPages ? ', getBlogs' : ''} } from '@/lib/api';
+
+const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || '${project.deploymentUrl || ''}';
+const LANGUAGES = ${JSON.stringify(langCodes)};
+const DEFAULT_LANG = '${defaultLanguage}';
+
+export const revalidate = 60;
+
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const entries: MetadataRoute.Sitemap = [];
+
+  // Dynamic pages from API
+  const pages = await getPages();
+  for (const page of pages) {
+    if (page.type === 'blog-post') continue;
+    const priority = page.path === '/' ? 1.0 : 0.8;
+    const languages: Record<string, string> = {};
+    for (const lang of LANGUAGES) {
+      languages[lang] = \`\${BASE_URL}/\${lang}\${page.path === '/' ? '' : page.path}\`;
+    }
+    entries.push({
+      url: \`\${BASE_URL}/\${DEFAULT_LANG}\${page.path === '/' ? '' : page.path}\`,
+      lastModified: new Date(page.updatedAt),
+      changeFrequency: page.path === '/' ? 'daily' : 'weekly',
+      priority,
+      alternates: { languages },
+    });
+  }
+${hasBlogPages ? `
+  // Dynamic blog posts
+  try {
+    const { blogs } = await getBlogs(1, 100);
+    for (const blog of blogs) {
+      const languages: Record<string, string> = {};
+      for (const lang of LANGUAGES) {
+        languages[lang] = \`\${BASE_URL}/\${lang}/blog/\${blog.slug}\`;
+      }
+      entries.push({
+        url: \`\${BASE_URL}/\${DEFAULT_LANG}/blog/\${blog.slug}\`,
+        lastModified: new Date(blog.publishedAt),
+        changeFrequency: 'weekly',
+        priority: 0.7,
+        alternates: { languages },
+      });
+    }
+  } catch (error) {
+    console.error('Sitemap: failed to fetch blogs', error);
+  }
+` : ''}
+  return entries;
+}
+`;
+  } else {
+    return `import { MetadataRoute } from 'next';
+import { getPages${hasBlogPages ? ', getBlogs' : ''} } from '@/lib/api';
+
+const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || '${project.deploymentUrl || ''}';
+
+export const revalidate = 60;
+
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const entries: MetadataRoute.Sitemap = [];
+
+  // Dynamic pages from API
+  const pages = await getPages();
+  for (const page of pages) {
+    if (page.type === 'blog-post') continue;
+    entries.push({
+      url: \`\${BASE_URL}\${page.path === '/' ? '' : page.path}\`,
+      lastModified: new Date(page.updatedAt),
+      changeFrequency: page.path === '/' ? 'daily' : 'weekly',
+      priority: page.path === '/' ? 1.0 : 0.8,
+    });
+  }
+${hasBlogPages ? `
+  // Dynamic blog posts
+  try {
+    const { blogs } = await getBlogs(1, 100);
+    for (const blog of blogs) {
+      entries.push({
+        url: \`\${BASE_URL}/blog/\${blog.slug}\`,
+        lastModified: new Date(blog.publishedAt),
+        changeFrequency: 'weekly',
+        priority: 0.7,
+      });
+    }
+  } catch (error) {
+    console.error('Sitemap: failed to fetch blogs', error);
+  }
+` : ''}
+  return entries;
+}
+`;
+  }
+}
+
+// Generate robots.ts for the published Next.js project
+function generateRobotsCode(): string {
+  return `import { MetadataRoute } from 'next';
+
+const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || '';
+
+export default function robots(): MetadataRoute.Robots {
+  return {
+    rules: [
+      {
+        userAgent: '*',
+        allow: '/',
+        disallow: ['/api/', '/_next/'],
+      },
+    ],
+    sitemap: \`\${BASE_URL}/sitemap.xml\`,
+  };
+}
+`;
 }

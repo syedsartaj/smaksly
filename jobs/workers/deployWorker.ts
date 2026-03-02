@@ -1,12 +1,12 @@
 import { Job } from 'bullmq';
 import { createWorker, QUEUE_NAMES, addJob } from '@/lib/queue';
-import { deployArticle, triggerVercelDeploy, regenerateSitemap } from '@/services/deployService';
+import { deployArticle, triggerVercelDeploy } from '@/services/deployService';
 import { connectDB } from '@/lib/db';
 import { Content } from '@/models';
 
 interface DeployJob {
   websiteId: string;
-  action: 'deploy' | 'sitemap' | 'full';
+  action: 'deploy' | 'full';
   contentId?: string;
   slug?: string;
 }
@@ -15,17 +15,12 @@ async function processDeployJob(job: Job<DeployJob>): Promise<unknown> {
   const { websiteId, action, contentId, slug } = job.data;
   console.log(`[DeployWorker] Processing deploy: action=${action}, site=${websiteId}`);
 
-  if (action === 'sitemap') {
-    const sitemap = await regenerateSitemap(websiteId);
-    return { action: 'sitemap', xmlLength: sitemap.length };
-  }
-
   if (action === 'deploy') {
     const result = await triggerVercelDeploy(websiteId);
     return { action: 'deploy', ...result };
   }
 
-  // action === 'full': deploy latest unpublished content, regenerate sitemap, trigger deploy
+  // action === 'full': deploy latest unpublished content and trigger deploy
   await connectDB();
   const unpublished = await Content.find({
     websiteId,

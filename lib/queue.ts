@@ -7,7 +7,6 @@ export const QUEUE_NAMES = {
   CONTENT_GENERATION: 'content-generation',
   SEO_SYNC: 'seo-sync',
   GUEST_POST_EXPIRY: 'guest-post-expiry',
-  SITEMAP_GENERATION: 'sitemap-generation',
   INDEXING_CHECK: 'indexing-check',
   ANALYTICS_SYNC: 'analytics-sync',
   EMAIL_NOTIFICATION: 'email-notification',
@@ -40,10 +39,6 @@ export interface SEOSyncJob {
 export interface GuestPostExpiryJob {
   guestPostId: string;
   action: 'check' | 'expire' | 'notify';
-}
-
-export interface SitemapGenerationJob {
-  websiteId: string;
 }
 
 export interface IndexingCheckJob {
@@ -138,11 +133,6 @@ export const addJob = {
     return queue.add('expiry', data, options);
   },
 
-  sitemapGeneration: async (data: SitemapGenerationJob, options?: { delay?: number; priority?: number }) => {
-    const queue = getQueue<SitemapGenerationJob>(QUEUE_NAMES.SITEMAP_GENERATION);
-    return queue.add('generate', data, options);
-  },
-
   indexingCheck: async (data: IndexingCheckJob, options?: { delay?: number; priority?: number }) => {
     const queue = getQueue<IndexingCheckJob>(QUEUE_NAMES.INDEXING_CHECK);
     return queue.add('check', data, options);
@@ -178,7 +168,7 @@ export const addJob = {
     return queue.add('fix', data, options);
   },
 
-  deploy: async (data: { websiteId: string; action: 'deploy' | 'sitemap' | 'full' }, options?: { delay?: number; priority?: number }) => {
+  deploy: async (data: { websiteId: string; action: 'deploy' | 'full' }, options?: { delay?: number; priority?: number }) => {
     const queue = getQueue<typeof data>(QUEUE_NAMES.DEPLOY);
     return queue.add('deploy', data, options);
   },
@@ -222,17 +212,6 @@ export const scheduleRecurringJobs = async () => {
     }
   );
 
-  // Weekly sitemap regeneration on Sundays at 4 AM
-  const sitemapQueue = getQueue<SitemapGenerationJob>(QUEUE_NAMES.SITEMAP_GENERATION);
-  await sitemapQueue.add(
-    'weekly-generation',
-    { websiteId: 'all' },
-    {
-      repeat: {
-        pattern: '0 4 * * 0', // 4 AM on Sundays
-      },
-    }
-  );
 };
 
 // Get queue events for monitoring

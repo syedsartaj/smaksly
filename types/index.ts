@@ -181,7 +181,6 @@ export type {
   ContentGenerationJob,
   SEOSyncJob,
   GuestPostExpiryJob,
-  SitemapGenerationJob,
   IndexingCheckJob,
   AnalyticsSyncJob,
   EmailNotificationJob,
