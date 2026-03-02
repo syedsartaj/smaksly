@@ -6,6 +6,7 @@ import {
 } from './prompts/page-generation';
 import {
   CODE_EDIT_SYSTEM_PROMPT,
+  CONVERSATIONAL_EDIT_SYSTEM_PROMPT,
   createCodeEditPrompt,
   createQuickEditPrompt,
   createImprovementAnalysisPrompt,
@@ -48,6 +49,9 @@ export interface PageGenerationParams {
   existingComponents: string[];
   projectSettings: ProjectSettings;
   mediaReferences?: MediaReference[];
+  language?: string;
+  direction?: 'ltr' | 'rtl';
+  languageName?: string;
 }
 
 export interface PageGenerationResult {
@@ -119,7 +123,7 @@ export class BuilderAIService {
    * Generate a complete page based on user description
    */
   async generatePage(params: PageGenerationParams): Promise<PageGenerationResult> {
-    const { description, pageType, pagePath, existingComponents, projectSettings, mediaReferences } = params;
+    const { description, pageType, pagePath, existingComponents, projectSettings, mediaReferences, language, direction, languageName } = params;
 
     try {
       let userPrompt = createPageGenerationPrompt({
@@ -128,6 +132,9 @@ export class BuilderAIService {
         pagePath,
         existingComponents,
         projectSettings,
+        language,
+        direction,
+        languageName,
       });
 
       // Add media references to the prompt if available
@@ -329,10 +336,14 @@ When using these images, use the Image component with the exact URL provided. Fo
   ): Promise<CodeEditResult> {
     try {
       const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
-        { role: 'system', content: CODE_EDIT_SYSTEM_PROMPT },
+        { role: 'system', content: CONVERSATIONAL_EDIT_SYSTEM_PROMPT },
         {
           role: 'user',
-          content: `Current code:\n\`\`\`tsx\n${code}\n\`\`\``,
+          content: `Here is my current code. I'll ask you to make specific changes to it.\n\n\`\`\`tsx\n${code}\n\`\`\``,
+        },
+        {
+          role: 'assistant',
+          content: 'I can see your code. What changes would you like me to make? I\'ll modify only the parts you specify and return the complete updated code.',
         },
       ];
 

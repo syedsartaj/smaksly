@@ -35,6 +35,15 @@ STYLING GUIDELINES:
 - Apply hover and focus states for interactive elements
 - Use proper color contrast for accessibility
 
+RTL/BIDIRECTIONAL RULES (when generating for RTL languages like Arabic, Hebrew, etc.):
+- Use logical Tailwind utilities instead of physical ones: ms- (margin-start) instead of ml-, me- (margin-end) instead of mr-, ps- (padding-start) instead of pl-, pe- (padding-end) instead of pr-
+- Use text-start and text-end instead of text-left and text-right
+- Use start-0/end-0 instead of left-0/right-0
+- Add space-x-reverse to horizontal flex containers that use space-x
+- Use flex-row-reverse for RTL flex layouts when needed
+- Wrap content in a div with dir="rtl" when generating RTL pages
+- Content text should be in the target language
+
 MODULAR COMPONENT TYPES:
 When generating specific component types, follow these guidelines:
 
@@ -88,11 +97,29 @@ NOTE: Do NOT include Header or Footer - they are in the Layout component
 BLOG DATA FOR PAGES:
 For BLOG LISTING pages, the component receives a 'blogs' prop with data from the database.
 DO NOT create hardcoded const blogs = [...] arrays with mock data.
-DO NOT use TypeScript interfaces or type annotations - use plain JavaScript.
+Use proper TypeScript types for the blog data.
 
 Blog listing page structure (use this EXACT format):
-\`\`\`javascript
-export default function Blogs({ blogs = [] }) {
+\`\`\`tsx
+interface BlogPost {
+  _id: string;
+  title: string;
+  slug: string;
+  excerpt: string;
+  featuredImage: string;
+  publishedAt: string;
+  authorName: string;
+  readingTime: number;
+  tags: string[];
+  category?: { name: string; slug: string };
+}
+
+interface BlogListingProps {
+  blogs: BlogPost[];
+  blogBasePath?: string;
+}
+
+export default function Blogs({ blogs = [], blogBasePath = '/blog' }: BlogListingProps) {
   return (
     <main>
       {blogs.map((blog) => (
@@ -105,9 +132,28 @@ export default function Blogs({ blogs = [] }) {
 }
 \`\`\`
 
-For blog post detail pages, use plain JavaScript without TypeScript:
-\`\`\`javascript
-export default function BlogPost({ blog = {} }) {
+For blog post detail pages:
+\`\`\`tsx
+interface BlogPostData {
+  _id?: string;
+  title?: string;
+  slug?: string;
+  body?: string;
+  excerpt?: string;
+  featuredImage?: string;
+  publishedAt?: string;
+  authorName?: string;
+  authorBio?: string;
+  readingTime?: number;
+  tags?: string[];
+}
+
+interface BlogPostProps {
+  blog: BlogPostData;
+  blogBasePath?: string;
+}
+
+export default function BlogPost({ blog = {} as BlogPostData, blogBasePath = '/blog' }: BlogPostProps) {
   if (!blog._id) {
     return <main className="p-8 text-center">Blog post not found</main>;
   }
@@ -116,8 +162,8 @@ export default function BlogPost({ blog = {} }) {
     <main>
       <h1>{blog.title}</h1>
       <p>By {blog.authorName} | {blog.readingTime} min read</p>
-      <img src={blog.featuredImage} alt={blog.title} />
-      <div dangerouslySetInnerHTML={{ __html: blog.body }} />
+      <img src={blog.featuredImage} alt={blog.title || ''} />
+      <div dangerouslySetInnerHTML={{ __html: blog.body || '' }} />
     </main>
   );
 }
@@ -139,8 +185,11 @@ export const createPageGenerationPrompt = (params: {
     fontFamily: string;
   };
   pagePath: string;
+  language?: string;
+  direction?: 'ltr' | 'rtl';
+  languageName?: string;
 }): string => {
-  const { description, pageType, existingComponents, projectSettings, pagePath } = params;
+  const { description, pageType, existingComponents, projectSettings, pagePath, language, direction, languageName } = params;
 
   let pageTypeInstructions = '';
 
@@ -154,15 +203,21 @@ This is a BLOG LISTING page. Requirements:
 - Add category/tag filters if appropriate
 - Make blog cards clickable (link to /blog/[slug])
 
-CRITICAL - Use this EXACT function signature (copy it exactly):
+CRITICAL - Define TypeScript interfaces and use this function signature:
+\`\`\`tsx
+interface BlogPost {
+  _id: string; title: string; slug: string; excerpt: string;
+  featuredImage: string; publishedAt: string; authorName: string;
+  readingTime: number; tags: string[]; category?: { name: string; slug: string };
+}
+interface BlogListingProps { blogs: BlogPost[]; blogBasePath?: string; }
+export default function Blogs({ blogs = [], blogBasePath = '/blog' }: BlogListingProps) {
 \`\`\`
-export default function Blogs({ blogs = [] }) {
-\`\`\`
-- DO NOT add TypeScript type annotations to the function parameters
-- DO NOT create interface or type declarations
 - DO NOT create hardcoded const blogs = [...] with mock data
-- The blogs prop is an array with: _id, title, slug, excerpt, featuredImage, publishedAt, authorName, readingTime, tags
-- Map over the blogs prop to render posts`;
+- Map over the blogs prop to render posts
+- Use the blogBasePath prop for blog card links: <Link href={\\\`\\\${blogBasePath}/\\\${blog.slug}\\\`}>
+  This ensures correct links in both single-language and multi-language sites.
+- Use next/image for featured images`;
       break;
 
     case 'blog-post':
@@ -174,15 +229,20 @@ This is a BLOG POST detail page for dynamic route /blog/[slug]. Requirements:
 - Add related posts section placeholder
 - Include author bio section
 
-CRITICAL - Use this EXACT function signature (copy it exactly):
+CRITICAL - Define TypeScript interfaces and use this function signature:
+\`\`\`tsx
+interface BlogPostData {
+  _id?: string; title?: string; slug?: string; body?: string;
+  excerpt?: string; featuredImage?: string; publishedAt?: string;
+  authorName?: string; authorBio?: string; readingTime?: number; tags?: string[];
+}
+interface BlogPostProps { blog: BlogPostData; blogBasePath?: string; }
+export default function BlogPost({ blog = {} as BlogPostData, blogBasePath = '/blog' }: BlogPostProps) {
 \`\`\`
-export default function BlogPost({ blog = {} }) {
-\`\`\`
-- DO NOT add TypeScript type annotations
-- DO NOT create interface or type declarations
-- The blog prop contains: _id, title, slug, body (HTML content), excerpt, featuredImage, publishedAt, authorName, authorBio, readingTime, tags
 - Use dangerouslySetInnerHTML to render blog.body HTML content
-- Show a "Blog post not found" message if blog is empty`;
+- Show a "Blog post not found" message if !blog._id
+- Use next/image for the featured image
+- Use next/link for navigation links (e.g., back to blog: <Link href={blogBasePath}>Back to Blog</Link>)`;
       break;
 
     case 'static':
@@ -230,6 +290,14 @@ IMPORTANT:
 - Include proper spacing and visual hierarchy
 - DO NOT include Header or Footer - they are handled by the Layout component
 - Wrap your page content in a <main> tag
+${language && language !== 'en' ? `
+LANGUAGE & DIRECTION:
+- Language: ${languageName || language} (${language})
+- Direction: ${direction || 'ltr'}
+- All visible text content should be written in ${languageName || language}
+${direction === 'rtl' ? `- This is an RTL language. Use logical Tailwind properties (ms-, me-, ps-, pe-, text-start, text-end)
+- Add dir="rtl" to the <main> wrapper element
+- Use space-x-reverse on horizontal flex containers` : ''}` : ''}
 
 Generate the complete page component now:`;
 };
@@ -250,8 +318,11 @@ export const createComponentGenerationPrompt = (params: {
     fontFamily: string;
   };
   pages?: PageInfo[];
+  language?: string;
+  direction?: 'ltr' | 'rtl';
+  languageName?: string;
 }): string => {
-  const { description, componentName, componentType, projectSettings, pages = [] } = params;
+  const { description, componentName, componentType, projectSettings, pages = [], language, direction, languageName } = params;
 
   // Determine if this is a navigation or footer component
   const isNavigation = componentName.toLowerCase().includes('nav') ||
@@ -381,6 +452,11 @@ REQUIREMENTS:
 5. Include proper TypeScript types
 6. Add accessibility attributes
 7. Export as default
+${language && language !== 'en' ? `
+LANGUAGE & DIRECTION:
+- Language: ${languageName || language} (${language})
+- Direction: ${direction || 'ltr'}
+${direction === 'rtl' ? `- Use logical Tailwind properties (ms-, me-, ps-, pe-, text-start, text-end) for RTL support` : ''}` : ''}
 
 COMPONENT TYPE GUIDELINES:
 ${componentType === 'layout' ? '- This is a layout component (Header, Footer, Navigation)\n- Should be consistent across pages\n- Include navigation links and branding' : ''}

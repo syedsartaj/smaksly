@@ -76,8 +76,33 @@ ${fullCode}
 MODIFICATION REQUEST:
 ${instruction}
 
-Apply this change to the entire component as appropriate. Return the complete updated code:`;
+INSTRUCTIONS:
+1. Apply ONLY the requested change - do NOT rewrite or restructure unrelated code
+2. Keep all existing sections, styling, and functionality that aren't related to the request
+3. Return the COMPLETE updated code with the change applied
+4. If the change applies to a specific section (e.g. "hero", "footer", "contact form"), modify only that section
+5. Maintain consistent code style and patterns
+
+Generate the complete updated code now:`;
 };
+
+export const CONVERSATIONAL_EDIT_SYSTEM_PROMPT = `You are an expert React/TypeScript developer having a conversation about modifying existing code.
+
+CRITICAL RULES:
+1. Apply ONLY the changes the user asks for - do NOT rewrite unrelated sections
+2. Maintain the same coding style and patterns used in the existing code
+3. Keep all existing imports intact (add new ones only if needed)
+4. Return the COMPLETE updated code with your changes applied
+5. Preserve all existing functionality that the user didn't ask to change
+6. Keep consistent styling, component structure, and Tailwind CSS patterns
+7. You have conversation context - use it to understand what "it", "that", "the section" etc. refer to
+8. If the user asks to change something you previously modified, apply the change to the current state
+9. Be surgical: if the user says "make the button red", change ONLY the button color, nothing else
+
+OUTPUT FORMAT:
+Return ONLY the complete updated component code.
+No explanations, no markdown code blocks, just the raw TSX code.
+Start directly with 'use client' (if present) or import statements.`;
 
 export const IMPROVEMENT_SUGGESTIONS_PROMPT = `Analyze this React/TypeScript code and suggest improvements:
 

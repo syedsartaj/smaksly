@@ -1,6 +1,20 @@
 import { create } from 'zustand';
 
 // Types
+export interface LanguageConfig {
+  code: string;
+  name: string;
+  direction: 'ltr' | 'rtl';
+  isDefault: boolean;
+}
+
+export interface SeoMetadata {
+  ogImage?: string;
+  twitterCard?: 'summary' | 'summary_large_image';
+  twitterHandle?: string;
+  themeColor?: string;
+}
+
 export interface BuilderProject {
   _id: string;
   websiteId: string;
@@ -27,6 +41,9 @@ export interface BuilderProject {
       indexName?: string;
       logoAltText?: string;
     };
+    seoMetadata?: SeoMetadata;
+    languages?: LanguageConfig[];
+    defaultLanguage?: string;
   };
   blogConfig: {
     enabled: boolean;
@@ -59,6 +76,8 @@ export interface BuilderPage {
   }>;
   metaTitle?: string;
   metaDescription?: string;
+  ogImage?: string;
+  language?: string;
   status: 'draft' | 'generated' | 'edited' | 'published';
   lastGeneratedAt?: string;
   order: number;
@@ -163,6 +182,9 @@ interface BuilderState {
   isPublishing: boolean;
   publishError: string | null;
 
+  // Language
+  currentLanguage: string;
+
   // Media
   media: BuilderMedia[];
   mediaCategories: MediaCategory[];
@@ -211,6 +233,9 @@ interface BuilderState {
 
   setIsPublishing: (loading: boolean) => void;
   setPublishError: (error: string | null) => void;
+
+  // Language
+  setCurrentLanguage: (language: string) => void;
 
   // Complex Actions
   loadProject: (projectId: string) => Promise<void>;
@@ -267,6 +292,9 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
 
   isPublishing: false,
   publishError: null,
+
+  // Language
+  currentLanguage: 'en',
 
   // Media
   media: [],
@@ -377,6 +405,9 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
   setIsPublishing: (isPublishing) => set({ isPublishing }),
   setPublishError: (publishError) => set({ publishError }),
 
+  // Language
+  setCurrentLanguage: (currentLanguage) => set({ currentLanguage }),
+
   // Complex Actions
   loadProject: async (projectId: string) => {
     try {
@@ -396,6 +427,7 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
         pages: pages || [],
         components: components || [],
         isLoadingProjects: false,
+        currentLanguage: project.settings?.defaultLanguage || 'en',
       });
 
       // Set first page as current if available
@@ -499,7 +531,7 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
   },
 
   generatePreview: async () => {
-    const { code, project, currentPage, branding } = get();
+    const { code, project, currentPage, branding, currentLanguage } = get();
 
     if (!code || !project) {
       return;
@@ -508,6 +540,10 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
     try {
       set({ isPreviewLoading: true, previewError: null });
 
+      // Find direction for current language
+      const langConfig = project.settings?.languages?.find((l) => l.code === currentLanguage);
+      const direction = langConfig?.direction || 'ltr';
+
       const response = await fetch('/api/builder/preview', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -515,11 +551,14 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
           code,
           projectId: project._id,
           pageType: currentPage?.type || 'static',
+          includeLayout: !!currentPage, // Include Header/Footer when previewing pages
           projectSettings: {
             ...project.settings,
             // Merge branding from store state (updated after saveBranding)
             branding: branding || project.settings?.branding,
           },
+          language: currentLanguage,
+          direction,
         }),
       });
 
@@ -759,6 +798,16 @@ export const selectCode = (state: BuilderState) => state.code;
 export const selectIsDirty = (state: BuilderState) => state.isDirty;
 export const selectIsGenerating = (state: BuilderState) => state.isGenerating;
 export const selectPreviewHtml = (state: BuilderState) => state.previewHtml;
+
+// Language Selectors
+export const selectCurrentLanguage = (state: BuilderState) => state.currentLanguage;
+export const selectLanguages = (state: BuilderState) => state.project?.settings?.languages || [];
+export const selectPagesByLanguage = (state: BuilderState) => {
+  const lang = state.currentLanguage;
+  const languages = state.project?.settings?.languages || [];
+  if (languages.length <= 1) return state.pages;
+  return state.pages.filter((p) => !p.language || p.language === lang);
+};
 
 // Media Selectors
 export const selectMedia = (state: BuilderState) => state.media;

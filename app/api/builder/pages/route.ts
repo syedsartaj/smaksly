@@ -18,9 +18,16 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const pages = await BuilderPage.find({
+    const language = searchParams.get('language');
+
+    const query: Record<string, unknown> = {
       projectId: new mongoose.Types.ObjectId(projectId),
-    })
+    };
+    if (language) {
+      query.language = language;
+    }
+
+    const pages = await BuilderPage.find(query)
       .sort({ order: 1, createdAt: 1 })
       .lean();
 
@@ -43,7 +50,7 @@ export async function POST(req: NextRequest) {
     await connectDB();
 
     const body = await req.json();
-    const { projectId, name, path, type, metaTitle, metaDescription } = body;
+    const { projectId, name, path, type, metaTitle, metaDescription, language } = body;
 
     // Validate projectId
     if (!projectId || !mongoose.Types.ObjectId.isValid(projectId)) {
@@ -78,15 +85,19 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Check for duplicate path in project
+    // Resolve language from project settings
+    const pageLanguage = language || project.settings?.defaultLanguage || 'en';
+
+    // Check for duplicate path+language in project
     const existingPage = await BuilderPage.findOne({
       projectId: new mongoose.Types.ObjectId(projectId),
       path: path,
+      language: pageLanguage,
     });
 
     if (existingPage) {
       return NextResponse.json(
-        { success: false, error: 'A page with this path already exists' },
+        { success: false, error: 'A page with this path already exists for this language' },
         { status: 400 }
       );
     }
@@ -107,6 +118,7 @@ export async function POST(req: NextRequest) {
       path: path,
       type: type || 'static',
       isHomePage: path === '/',
+      language: pageLanguage,
       code: '',
       aiPrompt: '',
       status: 'draft',

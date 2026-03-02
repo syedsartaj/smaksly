@@ -12,8 +12,9 @@ import {
   Layout,
   FileText,
   Newspaper,
+  Globe,
 } from 'lucide-react';
-import { useBuilderStore, BuilderPage, BuilderComponent } from '@/stores/useBuilderStore';
+import { useBuilderStore, BuilderPage, BuilderComponent, selectPagesByLanguage, selectLanguages, selectCurrentLanguage } from '@/stores/useBuilderStore';
 
 const PAGE_TYPE_ICONS: Record<string, React.ElementType> = {
   static: FileText,
@@ -37,7 +38,13 @@ export function FileTree() {
     project,
     setCode,
     setOriginalCode,
+    currentLanguage,
+    setCurrentLanguage,
   } = useBuilderStore();
+
+  const languages = useBuilderStore(selectLanguages);
+  const filteredPages = useBuilderStore(selectPagesByLanguage);
+  const hasMultipleLanguages = languages.length > 1;
 
   const [expandedSections, setExpandedSections] = useState({
     pages: true,
@@ -95,6 +102,7 @@ export function FileTree() {
           name: newPageName.trim(),
           path,
           type: newPageType,
+          language: currentLanguage,
         }),
       });
 
@@ -249,6 +257,29 @@ export default function ${newComponentName}() {
         <span className="text-sm font-medium text-zinc-300">Files</span>
       </div>
 
+      {/* Language Selector */}
+      {hasMultipleLanguages && (
+        <div className="border-b border-zinc-800 px-2 py-1.5 flex items-center gap-1 overflow-x-auto flex-shrink-0">
+          <Globe className="h-3 w-3 text-zinc-500 flex-shrink-0" />
+          {languages.map((lang) => (
+            <button
+              key={lang.code}
+              onClick={() => setCurrentLanguage(lang.code)}
+              className={`px-2 py-0.5 text-xs rounded transition-colors flex-shrink-0 ${
+                currentLanguage === lang.code
+                  ? 'bg-emerald-500/20 text-emerald-400 font-medium'
+                  : 'text-zinc-500 hover:text-white hover:bg-zinc-800'
+              }`}
+            >
+              {lang.code.toUpperCase()}
+              {lang.direction === 'rtl' && (
+                <span className="ml-0.5 text-amber-400 text-[10px]">RTL</span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* File Tree Content */}
       <div className="flex-1 overflow-auto py-2">
         {/* Pages Section */}
@@ -266,7 +297,7 @@ export default function ${newComponentName}() {
                 <Folder className="h-4 w-4" />
               )}
               <span>Pages</span>
-              <span className="text-xs text-zinc-600">({pages.length})</span>
+              <span className="text-xs text-zinc-600">({filteredPages.length})</span>
             </div>
             <button
               onClick={(e) => {
@@ -282,7 +313,7 @@ export default function ${newComponentName}() {
 
           {expandedSections.pages && (
             <div className="ml-4 border-l border-zinc-800">
-              {pages.map((page: BuilderPage) => {
+              {filteredPages.map((page: BuilderPage) => {
                 const Icon = PAGE_TYPE_ICONS[page.type] || File;
                 const isActive = currentPage?._id === page._id;
 

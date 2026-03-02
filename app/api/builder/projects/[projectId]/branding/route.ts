@@ -22,7 +22,7 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     }
 
     const project = await BuilderProject.findById(projectId)
-      .select('settings.branding settings.siteName settings.siteDescription settings.logo settings.favicon')
+      .select('settings.branding settings.siteName settings.siteDescription settings.logo settings.favicon settings.seoMetadata')
       .lean();
 
     if (!project) {
@@ -40,6 +40,7 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
         siteDescription: project.settings?.siteDescription || '',
         logo: project.settings?.logo || '',
         favicon: project.settings?.favicon || '',
+        seoMetadata: project.settings?.seoMetadata || {},
       },
     });
   } catch (error) {
@@ -74,6 +75,10 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
       logoAltText,
       siteName,
       siteDescription,
+      ogImage,
+      twitterCard,
+      twitterHandle,
+      themeColor,
     } = body;
 
     // Build update object
@@ -98,6 +103,20 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
       updateData['settings.branding.logoAltText'] = logoAltText;
     }
 
+    // SEO metadata fields
+    if (ogImage !== undefined) {
+      updateData['settings.seoMetadata.ogImage'] = ogImage;
+    }
+    if (twitterCard !== undefined) {
+      updateData['settings.seoMetadata.twitterCard'] = twitterCard;
+    }
+    if (twitterHandle !== undefined) {
+      updateData['settings.seoMetadata.twitterHandle'] = twitterHandle;
+    }
+    if (themeColor !== undefined) {
+      updateData['settings.seoMetadata.themeColor'] = themeColor;
+    }
+
     // General settings
     if (siteName !== undefined) {
       updateData['settings.siteName'] = siteName;
@@ -111,7 +130,7 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
       { $set: updateData },
       { new: true, runValidators: true }
     )
-      .select('settings.branding settings.siteName settings.siteDescription settings.logo settings.favicon')
+      .select('settings.branding settings.siteName settings.siteDescription settings.logo settings.favicon settings.seoMetadata')
       .lean();
 
     if (!project) {
@@ -129,6 +148,7 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
         siteDescription: project.settings?.siteDescription || '',
         logo: project.settings?.logo || '',
         favicon: project.settings?.favicon || '',
+        seoMetadata: project.settings?.seoMetadata || {},
       },
       message: 'Branding settings updated successfully',
     });

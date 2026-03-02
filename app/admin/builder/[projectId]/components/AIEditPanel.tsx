@@ -89,6 +89,7 @@ export function AIEditPanel({ onClose }: AIEditPanelProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           instruction: instructionToUse,
+          currentCode: code,
           selectedCode: selectedCode?.text || '',
           selectionContext: selectedCode
             ? {
@@ -96,6 +97,7 @@ export function AIEditPanel({ onClose }: AIEditPanelProps) {
                 endLine: selectedCode.endLine,
               }
             : undefined,
+          conversationHistory: conversationHistory.slice(-6),
         }),
       });
 
@@ -108,9 +110,16 @@ export function AIEditPanel({ onClose }: AIEditPanelProps) {
           status: 'edited',
         });
 
+        const warningText = data.data.warnings?.length > 0
+          ? `\n⚠ ${data.data.warnings.join(', ')}`
+          : '';
+        const contextText = selectedCode
+          ? `Applied changes to lines ${selectedCode.startLine}-${selectedCode.endLine}.`
+          : 'Applied changes to the page.';
+
         setConversationHistory((prev) => [
           ...prev,
-          { role: 'assistant', content: 'Changes applied successfully.' },
+          { role: 'assistant', content: `${contextText}${warningText}` },
         ]);
 
         setInstruction('');

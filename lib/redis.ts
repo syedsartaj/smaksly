@@ -1,10 +1,31 @@
 import { Redis } from '@upstash/redis';
 import IORedis from 'ioredis';
 
-// Upstash Redis for serverless (API routes, edge functions)
-export const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL!,
-  token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+// Lazy-init Upstash Redis to avoid build-time env var crashes
+let _redis: Redis | null = null;
+
+function getRedis(): Redis {
+  if (!_redis) {
+    const url = process.env.UPSTASH_REDIS_REST_URL;
+    const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+    if (!url || !token) {
+      throw new Error('UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN must be set');
+    }
+    _redis = new Redis({ url, token });
+  }
+  return _redis;
+}
+
+// Proxy for backwards compatibility: `redis.get(...)` still works everywhere
+export const redis: Redis = new Proxy({} as Redis, {
+  get(_target, prop, receiver) {
+    const instance = getRedis();
+    const value = Reflect.get(instance, prop, receiver);
+    if (typeof value === 'function') {
+      return value.bind(instance);
+    }
+    return value;
+  },
 });
 
 // IORedis for BullMQ (requires persistent connection)

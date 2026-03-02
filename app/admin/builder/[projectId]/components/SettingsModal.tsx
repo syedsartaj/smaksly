@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { X, Settings, Palette, Type, Save, RefreshCw } from 'lucide-react';
-import { useBuilderStore } from '@/stores/useBuilderStore';
+import { X, Settings, Palette, Type, Save, RefreshCw, Globe, Share2, Plus, Trash2 } from 'lucide-react';
+import { useBuilderStore, LanguageConfig } from '@/stores/useBuilderStore';
 
 interface SettingsModalProps {
   onClose: () => void;
@@ -37,6 +37,19 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   const [postsPerPage, setPostsPerPage] = useState(9);
   const [blogLayout, setBlogLayout] = useState<'grid' | 'list' | 'masonry'>('grid');
 
+  // SEO state
+  const [ogImage, setOgImage] = useState('');
+  const [twitterCard, setTwitterCard] = useState<'summary' | 'summary_large_image'>('summary_large_image');
+  const [twitterHandle, setTwitterHandle] = useState('');
+  const [themeColor, setThemeColor] = useState('#10b981');
+
+  // Language state
+  const [languages, setLanguages] = useState<LanguageConfig[]>([]);
+  const [showAddLanguage, setShowAddLanguage] = useState(false);
+  const [newLangCode, setNewLangCode] = useState('');
+  const [newLangName, setNewLangName] = useState('');
+  const [newLangDir, setNewLangDir] = useState<'ltr' | 'rtl'>('ltr');
+
   // Initialize form from project
   useEffect(() => {
     if (project) {
@@ -48,6 +61,15 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
       setBlogEnabled(project.blogConfig?.enabled ?? true);
       setPostsPerPage(project.blogConfig?.postsPerPage || 9);
       setBlogLayout(project.blogConfig?.layout || 'grid');
+
+      // SEO
+      setOgImage(project.settings?.seoMetadata?.ogImage || '');
+      setTwitterCard(project.settings?.seoMetadata?.twitterCard || 'summary_large_image');
+      setTwitterHandle(project.settings?.seoMetadata?.twitterHandle || '');
+      setThemeColor(project.settings?.seoMetadata?.themeColor || '#10b981');
+
+      // Languages
+      setLanguages(project.settings?.languages || [{ code: 'en', name: 'English', direction: 'ltr', isDefault: true }]);
     }
   }, [project]);
 
@@ -69,6 +91,14 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
             primaryColor,
             secondaryColor,
             fontFamily,
+            seoMetadata: {
+              ogImage: ogImage.trim(),
+              twitterCard,
+              twitterHandle: twitterHandle.trim(),
+              themeColor,
+            },
+            languages,
+            defaultLanguage: languages.find((l) => l.isDefault)?.code || 'en',
           },
           blogConfig: {
             enabled: blogEnabled,
@@ -93,6 +123,14 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
             primaryColor,
             secondaryColor,
             fontFamily,
+            seoMetadata: {
+              ogImage: ogImage.trim(),
+              twitterCard,
+              twitterHandle: twitterHandle.trim(),
+              themeColor,
+            },
+            languages,
+            defaultLanguage: languages.find((l) => l.isDefault)?.code || 'en',
           },
           blogConfig: {
             ...project.blogConfig,
@@ -277,6 +315,235 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                     <option value="list">List</option>
                     <option value="masonry">Masonry</option>
                   </select>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* SEO & Social */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <Share2 className="h-4 w-4 text-zinc-400" />
+              <h3 className="text-sm font-medium text-zinc-300">SEO & Social</h3>
+            </div>
+
+            <div>
+              <label className="block text-xs text-zinc-500 mb-1">OpenGraph Image URL</label>
+              <input
+                type="text"
+                value={ogImage}
+                onChange={(e) => setOgImage(e.target.value)}
+                placeholder="https://example.com/og-image.jpg"
+                className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-white text-sm focus:outline-none focus:border-emerald-500 placeholder-zinc-600"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs text-zinc-500 mb-1">Twitter Card Type</label>
+                <select
+                  value={twitterCard}
+                  onChange={(e) => setTwitterCard(e.target.value as typeof twitterCard)}
+                  className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-white text-sm focus:outline-none focus:border-emerald-500"
+                >
+                  <option value="summary">Summary</option>
+                  <option value="summary_large_image">Large Image</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs text-zinc-500 mb-1">Twitter Handle</label>
+                <input
+                  type="text"
+                  value={twitterHandle}
+                  onChange={(e) => setTwitterHandle(e.target.value)}
+                  placeholder="@yourhandle"
+                  className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-white text-sm focus:outline-none focus:border-emerald-500 placeholder-zinc-600"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs text-zinc-500 mb-1">Theme Color</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={themeColor}
+                  onChange={(e) => setThemeColor(e.target.value)}
+                  className="w-8 h-8 rounded cursor-pointer"
+                />
+                <input
+                  type="text"
+                  value={themeColor}
+                  onChange={(e) => setThemeColor(e.target.value)}
+                  className="flex-1 px-2 py-1 bg-zinc-800 border border-zinc-700 rounded text-white text-sm focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Languages */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Globe className="h-4 w-4 text-zinc-400" />
+                <h3 className="text-sm font-medium text-zinc-300">Languages</h3>
+              </div>
+              <button
+                onClick={() => setShowAddLanguage(true)}
+                className="flex items-center gap-1 px-2 py-1 text-xs text-zinc-400 hover:text-white hover:bg-zinc-800 rounded transition-colors"
+              >
+                <Plus className="h-3 w-3" />
+                Add
+              </button>
+            </div>
+
+            {/* Language list */}
+            <div className="space-y-2">
+              {languages.map((lang) => (
+                <div
+                  key={lang.code}
+                  className="flex items-center justify-between px-3 py-2 bg-zinc-800 rounded-lg"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-white">{lang.name}</span>
+                    <span className="text-xs text-zinc-500 bg-zinc-700 px-1.5 py-0.5 rounded">{lang.code}</span>
+                    <span className={`text-xs px-1.5 py-0.5 rounded ${
+                      lang.direction === 'rtl' ? 'bg-amber-500/20 text-amber-400' : 'bg-blue-500/20 text-blue-400'
+                    }`}>
+                      {lang.direction.toUpperCase()}
+                    </span>
+                    {lang.isDefault && (
+                      <span className="text-xs bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded">Default</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {!lang.isDefault && (
+                      <>
+                        <button
+                          onClick={() => {
+                            setLanguages(languages.map((l) => ({ ...l, isDefault: l.code === lang.code })));
+                          }}
+                          className="text-xs text-zinc-500 hover:text-white px-1.5 py-0.5 rounded hover:bg-zinc-700 transition-colors"
+                        >
+                          Set Default
+                        </button>
+                        <button
+                          onClick={() => {
+                            setLanguages(languages.filter((l) => l.code !== lang.code));
+                          }}
+                          className="p-1 text-zinc-500 hover:text-red-400 rounded hover:bg-zinc-700 transition-colors"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Add language form */}
+            {showAddLanguage && (
+              <div className="px-3 py-3 bg-zinc-800/50 rounded-lg space-y-2">
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-xs text-zinc-500 mb-1">Language Code</label>
+                    <input
+                      type="text"
+                      value={newLangCode}
+                      onChange={(e) => {
+                        const code = e.target.value.toLowerCase().slice(0, 5);
+                        setNewLangCode(code);
+                        // Auto-suggest RTL for known RTL languages
+                        const rtlCodes = ['ar', 'he', 'fa', 'ur', 'ps', 'sd', 'yi'];
+                        if (rtlCodes.includes(code)) {
+                          setNewLangDir('rtl');
+                        } else {
+                          setNewLangDir('ltr');
+                        }
+                        // Auto-fill name
+                        const nameMap: Record<string, string> = {
+                          en: 'English', ar: 'Arabic', fr: 'French', es: 'Spanish', de: 'German',
+                          it: 'Italian', pt: 'Portuguese', ru: 'Russian', zh: 'Chinese', ja: 'Japanese',
+                          ko: 'Korean', hi: 'Hindi', he: 'Hebrew', fa: 'Persian', ur: 'Urdu',
+                          tr: 'Turkish', nl: 'Dutch', pl: 'Polish', sv: 'Swedish',
+                        };
+                        if (nameMap[code]) setNewLangName(nameMap[code]);
+                      }}
+                      placeholder="e.g. ar"
+                      className="w-full px-2 py-1 bg-zinc-700 border border-zinc-600 rounded text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500"
+                      autoFocus
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-zinc-500 mb-1">Name</label>
+                    <input
+                      type="text"
+                      value={newLangName}
+                      onChange={(e) => setNewLangName(e.target.value)}
+                      placeholder="e.g. Arabic"
+                      className="w-full px-2 py-1 bg-zinc-700 border border-zinc-600 rounded text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs text-zinc-500 mb-1">Direction</label>
+                  <div className="flex gap-3">
+                    <label className="flex items-center gap-1.5 cursor-pointer">
+                      <input
+                        type="radio"
+                        checked={newLangDir === 'ltr'}
+                        onChange={() => setNewLangDir('ltr')}
+                        className="text-emerald-500"
+                      />
+                      <span className="text-xs text-zinc-300">LTR (Left to Right)</span>
+                    </label>
+                    <label className="flex items-center gap-1.5 cursor-pointer">
+                      <input
+                        type="radio"
+                        checked={newLangDir === 'rtl'}
+                        onChange={() => setNewLangDir('rtl')}
+                        className="text-emerald-500"
+                      />
+                      <span className="text-xs text-zinc-300">RTL (Right to Left)</span>
+                    </label>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      if (!newLangCode.trim() || !newLangName.trim()) return;
+                      if (languages.some((l) => l.code === newLangCode)) {
+                        alert('Language code already exists');
+                        return;
+                      }
+                      setLanguages([...languages, {
+                        code: newLangCode.trim(),
+                        name: newLangName.trim(),
+                        direction: newLangDir,
+                        isDefault: languages.length === 0,
+                      }]);
+                      setShowAddLanguage(false);
+                      setNewLangCode('');
+                      setNewLangName('');
+                      setNewLangDir('ltr');
+                    }}
+                    disabled={!newLangCode.trim() || !newLangName.trim()}
+                    className="flex-1 px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs rounded transition-colors disabled:opacity-50"
+                  >
+                    Add Language
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowAddLanguage(false);
+                      setNewLangCode('');
+                      setNewLangName('');
+                    }}
+                    className="px-2 py-1 bg-zinc-700 hover:bg-zinc-600 text-zinc-300 text-xs rounded transition-colors"
+                  >
+                    Cancel
+                  </button>
                 </div>
               </div>
             )}

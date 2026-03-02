@@ -62,6 +62,15 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 
     const existingComponents = components.map((c) => c.name);
 
+    // Look up page's language and direction from project settings
+    const pageLanguage = (page as any).language || project.settings?.defaultLanguage || 'en';
+    const projectLanguages = project.settings?.languages || [];
+    const langConfig = projectLanguages.find(
+      (l: { code: string }) => l.code === pageLanguage
+    );
+    const pageDirection = langConfig?.direction || 'ltr';
+    const pageLangName = langConfig?.name || '';
+
     // Generate page using AI
     const result = await builderAIService.generatePage({
       description: description.trim(),
@@ -75,6 +84,9 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
         fontFamily: project.settings?.fontFamily || 'Inter',
       },
       mediaReferences: validMediaRefs,
+      language: pageLanguage,
+      direction: pageDirection,
+      languageName: pageLangName,
     });
 
     if (!result.isValid) {

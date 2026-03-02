@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/db';
-import { Content, BuilderProject } from '@/models';
+import { Content, BuilderProject, BuilderComponent } from '@/models';
 import * as babel from '@babel/core';
 import mongoose from 'mongoose';
 
@@ -8,7 +8,7 @@ import mongoose from 'mongoose';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { code, projectId, pageType, projectSettings } = body;
+    const { code, projectId, pageType, includeLayout, projectSettings, language, direction } = body;
 
     if (!code || typeof code !== 'string') {
       return NextResponse.json(
@@ -118,8 +118,66 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Fetch and transpile Header/Footer components for page preview
+    let headerJs = '';
+    let footerJs = '';
+    if (includeLayout && projectId && mongoose.Types.ObjectId.isValid(projectId)) {
+      try {
+        await connectDB();
+        const layoutComponents = await BuilderComponent.find({
+          projectId: new mongoose.Types.ObjectId(projectId),
+        }).select('name code').lean();
+
+        const headerComp = layoutComponents.find(
+          (c: Record<string, unknown>) =>
+            (c.name as string)?.toLowerCase().includes('header') ||
+            (c.name as string)?.toLowerCase().includes('nav')
+        );
+        const footerComp = layoutComponents.find(
+          (c: Record<string, unknown>) => (c.name as string)?.toLowerCase().includes('footer')
+        );
+
+        const transpileComponent = (code: string, varName: string): string => {
+          try {
+            const preprocessed = code
+              .replace(/:\s*any\s+\w+\[\]/g, ': any[]')
+              .replace(/interface\s+\w+\s*\{[\s\S]*?\}\s*/g, '')
+              .replace(/type\s+\w+\s*=[\s\S]*?;\s*/g, '');
+
+            const result = babel.transformSync(preprocessed, {
+              presets: [
+                ['@babel/preset-react', { runtime: 'classic' }],
+                ['@babel/preset-typescript', { isTSX: true, allExtensions: true }],
+              ],
+              filename: `${varName}.tsx`,
+            });
+
+            if (!result?.code) return '';
+
+            return result.code
+              .replace(/import\s+.*?from\s+['"][^'"]+['"];?\n?/g, '')
+              .replace(/import\s+['"][^'"]+['"];?\n?/g, '')
+              .replace(/export\s+default\s+/g, `const ${varName} = `)
+              .replace(/export\s+/g, 'const ');
+          } catch (e) {
+            console.error(`Failed to transpile ${varName}:`, e);
+            return '';
+          }
+        };
+
+        if (headerComp?.code) {
+          headerJs = transpileComponent(headerComp.code as string, 'Header');
+        }
+        if (footerComp?.code) {
+          footerJs = transpileComponent(footerComp.code as string, 'Footer');
+        }
+      } catch (layoutError) {
+        console.error('Failed to load layout components for preview:', layoutError);
+      }
+    }
+
     // Generate preview HTML
-    const previewHtml = generatePreviewHTML(transpiledCode, blogData, singleBlog, projectSettings);
+    const previewHtml = generatePreviewHTML(transpiledCode, blogData, singleBlog, projectSettings, language, direction, headerJs, footerJs);
 
     return NextResponse.json({
       success: true,
@@ -159,7 +217,11 @@ function generatePreviewHTML(
       indexName?: string;
       logoAltText?: string;
     };
-  }
+  },
+  language?: string,
+  direction?: string,
+  headerJs?: string,
+  footerJs?: string
 ): string {
   // Remove import statements as they won't work in browser
   const cleanedCode = jsCode
@@ -188,8 +250,11 @@ function generatePreviewHTML(
     indexName: projectSettings?.branding?.indexName || projectSettings?.siteName || 'Home',
   };
 
+  const htmlLang = language || 'en';
+  const htmlDir = direction || 'ltr';
+
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="${htmlLang}" dir="${htmlDir}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -373,11 +438,32 @@ function generatePreviewHTML(
     const { useState, useEffect, useCallback, useMemo, useRef } = React;
 
     try {
+      // Layout components (Header/Footer)
+      ${headerJs || '// No header component'}
+      ${footerJs || '// No footer component'}
+
+      // Page component
       ${cleanedCode}
 
-      // Render the component with both blogs array and single blog
+      // Render with layout wrapping (Header + Page + Footer)
       const root = ReactDOM.createRoot(document.getElementById('root'));
-      root.render(React.createElement(typeof Page !== 'undefined' ? Page : (() => React.createElement('div', { className: 'p-4' }, 'No component found')), { blogs: blogs, blog: blog }));
+      const pageElement = React.createElement(
+        typeof Page !== 'undefined' ? Page : (() => React.createElement('div', { className: 'p-4' }, 'No component found')),
+        { blogs: blogs, blog: blog }
+      );
+      const _siteName = '${settings.siteName.replace(/'/g, "\\'")}';
+      const _hasLayout = typeof Header !== 'undefined' || typeof Footer !== 'undefined';
+      if (_hasLayout) {
+        root.render(
+          React.createElement('div', null,
+            typeof Header !== 'undefined' ? React.createElement(Header, { siteName: _siteName }) : null,
+            pageElement,
+            typeof Footer !== 'undefined' ? React.createElement(Footer, { siteName: _siteName }) : null
+          )
+        );
+      } else {
+        root.render(pageElement);
+      }
     } catch (error) {
       console.error('Preview render error:', error);
       document.getElementById('root').innerHTML = '<div style="padding: 20px; color: red; font-family: monospace;"><h2>Preview Error</h2><pre>' + error.message + '</pre></div>';

@@ -23,7 +23,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     }
 
     const body = await req.json();
-    const { instruction, selectedCode, selectionContext } = body;
+    const { instruction, currentCode, selectedCode, selectionContext, conversationHistory } = body;
 
     if (!instruction || typeof instruction !== 'string' || instruction.trim().length === 0) {
       return NextResponse.json(
@@ -41,20 +41,40 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       );
     }
 
-    if (!page.code || page.code.trim().length === 0) {
+    // Use current editor code (from client) if provided, otherwise fall back to DB
+    const codeToEdit = (currentCode && typeof currentCode === 'string' && currentCode.trim().length > 0)
+      ? currentCode
+      : page.code;
+
+    if (!codeToEdit || codeToEdit.trim().length === 0) {
       return NextResponse.json(
         { success: false, error: 'Page has no code to edit. Generate code first.' },
         { status: 400 }
       );
     }
 
-    // Edit code using AI
-    const result = await builderAIService.editCode({
-      fullCode: page.code,
-      selectedCode: selectedCode || '',
-      instruction: instruction.trim(),
-      selectionContext: selectionContext,
-    });
+    let result;
+
+    // Use conversational edit when there's history (follow-up edits)
+    const hasConversation = Array.isArray(conversationHistory) && conversationHistory.length > 0;
+    const hasSelection = selectedCode && typeof selectedCode === 'string' && selectedCode.trim().length > 0;
+
+    if (hasConversation && !hasSelection) {
+      // Conversational mode: AI has context from previous edits
+      result = await builderAIService.conversationalEdit(
+        codeToEdit,
+        conversationHistory,
+        instruction.trim()
+      );
+    } else {
+      // Direct edit mode: surgical edit on selection or quick edit on full code
+      result = await builderAIService.editCode({
+        fullCode: codeToEdit,
+        selectedCode: selectedCode || '',
+        instruction: instruction.trim(),
+        selectionContext: selectionContext,
+      });
+    }
 
     if (!result.isValid) {
       return NextResponse.json(
@@ -69,16 +89,18 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     }
 
     // Save the previous code to versions
-    page.versions.push({
-      code: page.code,
-      createdAt: new Date(),
-      prompt: instruction.trim(),
-      description: selectedCode ? 'Selection edit' : 'Full edit',
-    });
+    if (page.code && page.code.trim().length > 0) {
+      page.versions.push({
+        code: page.code,
+        createdAt: new Date(),
+        prompt: instruction.trim(),
+        description: hasSelection ? 'Selection edit' : hasConversation ? 'Conversational edit' : 'Full edit',
+      });
 
-    // Keep only last 10 versions
-    if (page.versions.length > 10) {
-      page.versions = page.versions.slice(-10);
+      // Keep only last 10 versions
+      if (page.versions.length > 10) {
+        page.versions = page.versions.slice(-10);
+      }
     }
 
     // Update page with edited code
@@ -93,7 +115,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     });
     page.aiConversation.push({
       role: 'assistant',
-      content: selectedCode
+      content: hasSelection
         ? 'Applied changes to selected section.'
         : 'Applied changes to the page.',
       timestamp: new Date(),

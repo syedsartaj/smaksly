@@ -26,6 +26,9 @@ export interface IBuilderPage extends Document {
   type: BuilderPageType;
   isHomePage: boolean;
 
+  // Language
+  language: string;
+
   // Generated Code
   code: string;
   cssModules?: string;
@@ -126,6 +129,13 @@ const BuilderPageSchema = new Schema<IBuilderPage>(
       default: false,
     },
 
+    // Language
+    language: {
+      type: String,
+      default: 'en',
+      trim: true,
+    },
+
     // Generated Code
     code: {
       type: String,
@@ -183,9 +193,10 @@ const BuilderPageSchema = new Schema<IBuilderPage>(
 );
 
 // Compound indexes
-BuilderPageSchema.index({ projectId: 1, path: 1 }, { unique: true });
+BuilderPageSchema.index({ projectId: 1, path: 1, language: 1 }, { unique: true });
 BuilderPageSchema.index({ projectId: 1, order: 1 });
 BuilderPageSchema.index({ projectId: 1, status: 1 });
+BuilderPageSchema.index({ projectId: 1, language: 1 });
 
 // Virtual for project
 BuilderPageSchema.virtual('project', {

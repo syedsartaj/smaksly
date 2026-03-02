@@ -1,14 +1,16 @@
 import mongoose from 'mongoose';
 
-const MONGODB_URI = process.env.MONGODB_URI!;
-
 let cached = (global as any).mongooseDb || { conn: null, promise: null };
 (global as any).mongooseDb = cached;
 
 export const connectDB = async () => {
   if (cached.conn) return cached.conn;
   if (!cached.promise) {
-    cached.promise = mongoose.connect(MONGODB_URI, {
+    const uri = process.env.MONGODB_URI;
+    if (!uri) {
+      throw new Error('MONGODB_URI environment variable is not set');
+    }
+    cached.promise = mongoose.connect(uri, {
       bufferCommands: false,
     });
   }

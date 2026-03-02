@@ -11,6 +11,20 @@ export interface IBuilderProjectBranding {
   logoAltText?: string;
 }
 
+export interface ISeoMetadata {
+  ogImage?: string;
+  twitterCard?: 'summary' | 'summary_large_image';
+  twitterHandle?: string;
+  themeColor?: string;
+}
+
+export interface ILanguageConfig {
+  code: string;
+  name: string;
+  direction: 'ltr' | 'rtl';
+  isDefault: boolean;
+}
+
 export interface IBuilderProjectSettings {
   primaryColor: string;
   secondaryColor: string;
@@ -20,6 +34,9 @@ export interface IBuilderProjectSettings {
   favicon?: string;
   logo?: string;
   branding?: IBuilderProjectBranding;
+  seoMetadata?: ISeoMetadata;
+  languages?: ILanguageConfig[];
+  defaultLanguage?: string;
   socialLinks?: {
     twitter?: string;
     facebook?: string;
@@ -130,6 +147,19 @@ const BuilderProjectSchema = new Schema<IBuilderProject>(
         indexName: { type: String },
         logoAltText: { type: String },
       },
+      seoMetadata: {
+        ogImage: { type: String },
+        twitterCard: { type: String, enum: ['summary', 'summary_large_image'] },
+        twitterHandle: { type: String },
+        themeColor: { type: String },
+      },
+      languages: [{
+        code: { type: String, required: true },
+        name: { type: String, required: true },
+        direction: { type: String, enum: ['ltr', 'rtl'], default: 'ltr' },
+        isDefault: { type: Boolean, default: false },
+      }],
+      defaultLanguage: { type: String, default: 'en' },
       socialLinks: {
         twitter: { type: String },
         facebook: { type: String },

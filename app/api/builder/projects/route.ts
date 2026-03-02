@@ -112,6 +112,8 @@ export async function POST(req: NextRequest) {
         logo: settings?.logo || '',
         favicon: settings?.favicon || '',
         socialLinks: settings?.socialLinks || {},
+        languages: [{ code: 'en', name: 'English', direction: 'ltr', isDefault: true }],
+        defaultLanguage: 'en',
       },
       blogConfig: {
         enabled: blogConfig?.enabled ?? true,
@@ -134,6 +136,7 @@ export async function POST(req: NextRequest) {
       path: '/',
       type: 'static',
       isHomePage: true,
+      language: 'en',
       status: 'draft',
       code: '',
       aiPrompt: '',
