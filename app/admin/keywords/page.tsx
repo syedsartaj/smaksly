@@ -58,6 +58,16 @@ interface Website {
 }
 
 export default function KeywordsPage() {
+  const [activeNav, setActiveNav] = useState<'keywords' | 'groups' | 'history' | 'master'>('keywords');
+
+  // Nav redirect helper
+  const handleNavChange = (tab: typeof activeNav) => {
+    setActiveNav(tab);
+    if (tab === 'groups') window.location.href = '/admin/keywords/groups';
+    if (tab === 'history') window.location.href = '/admin/keywords/history';
+    if (tab === 'master') window.location.href = '/admin/keywords/master';
+  };
+
   const [keywords, setKeywords] = useState<KeywordData[]>([]);
   const [stats, setStats] = useState<KeywordStats | null>(null);
   const [websites, setWebsites] = useState<Website[]>([]);
@@ -196,6 +206,27 @@ export default function KeywordsPage() {
       {/* Header */}
       <div className="border-b border-zinc-800 bg-zinc-900/50">
         <div className="max-w-7xl mx-auto px-6 py-6">
+          {/* Sub-navigation */}
+          <div className="flex items-center gap-1 mb-5">
+            {[
+              { key: 'keywords', label: 'Website Keywords' },
+              { key: 'master', label: 'Master Library' },
+              { key: 'groups', label: 'Keyword Groups' },
+              { key: 'history', label: 'Ranking History' },
+            ].map((nav) => (
+              <button
+                key={nav.key}
+                onClick={() => handleNavChange(nav.key as typeof activeNav)}
+                className={`px-4 py-2 text-sm font-medium rounded-lg ${
+                  activeNav === nav.key
+                    ? 'bg-emerald-600 text-white'
+                    : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                }`}
+              >
+                {nav.label}
+              </button>
+            ))}
+          </div>
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl font-bold">Keyword Research</h1>

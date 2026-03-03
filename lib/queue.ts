@@ -15,6 +15,10 @@ export const QUEUE_NAMES = {
   HEALTH_CHECK: 'health-check',
   AUTO_FIX: 'auto-fix',
   DEPLOY: 'deploy',
+  // SEO Platform
+  KEYWORD_HISTORY_SYNC: 'keyword-history-sync',
+  WEBSITE_FIXER: 'website-fixer',
+  UPTIME_PING: 'uptime-ping',
 } as const;
 
 // Job types
@@ -208,6 +212,42 @@ export const scheduleRecurringJobs = async () => {
     {
       repeat: {
         pattern: '0 3 * * *', // 3 AM daily
+      },
+    }
+  );
+
+  // Daily keyword ranking history sync at 6 AM
+  const kwHistoryQueue = getQueue<{ websiteId: string }>(QUEUE_NAMES.KEYWORD_HISTORY_SYNC);
+  await kwHistoryQueue.add(
+    'daily-history-sync',
+    { websiteId: 'all' },
+    {
+      repeat: {
+        pattern: '0 6 * * *', // 6 AM daily
+      },
+    }
+  );
+
+  // Weekly AI website fixer at 4 AM on Mondays
+  const fixerQueue = getQueue<{ websiteId: string; triggeredBy: string }>(QUEUE_NAMES.WEBSITE_FIXER);
+  await fixerQueue.add(
+    'weekly-fixer',
+    { websiteId: 'all', triggeredBy: 'cron' },
+    {
+      repeat: {
+        pattern: '0 4 * * 1', // 4 AM every Monday
+      },
+    }
+  );
+
+  // Uptime ping every 5 minutes
+  const uptimeQueue = getQueue<{ websiteId: string }>(QUEUE_NAMES.UPTIME_PING);
+  await uptimeQueue.add(
+    'ping-all',
+    { websiteId: 'all' },
+    {
+      repeat: {
+        pattern: '*/5 * * * *', // Every 5 minutes
       },
     }
   );

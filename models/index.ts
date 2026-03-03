@@ -62,3 +62,22 @@ export type { IHealthReport } from './HealthReport';
 // Issues
 export { Issue } from './Issue';
 export type { IIssue, IssueType, IssueSeverity, IssueStatus } from './Issue';
+
+// SEO Platform — Keyword Master & History
+export { KeywordMaster } from './KeywordMaster';
+export type { IKeywordMaster, KMProvider } from './KeywordMaster';
+
+export { KeywordHistory } from './KeywordHistory';
+export type { IKeywordHistory } from './KeywordHistory';
+
+// SEO Platform — Keyword Groups
+export { KeywordGroup } from './KeywordGroup';
+export type { IKeywordGroup, KeywordGroupStatus, IKeywordGroupAISuggestion } from './KeywordGroup';
+
+// SEO Platform — AI Fix Reports
+export { AIFixReport } from './AIFixReport';
+export type { IAIFixReport, IFixIssue, FixIssueSeverity, FixIssueCategory } from './AIFixReport';
+
+// SEO Platform — Uptime Monitoring
+export { UptimeLog } from './UptimeLog';
+export type { IUptimeLog, UptimeStatus } from './UptimeLog';

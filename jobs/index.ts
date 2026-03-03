@@ -3,6 +3,9 @@ import { startContentWorker } from './workers/contentWorker';
 import { startDeployWorker } from './workers/deployWorker';
 import { startHealthWorker } from './workers/healthWorker';
 import { startFixWorker } from './workers/fixWorker';
+import { startKeywordHistoryWorker } from './workers/keywordHistoryWorker';
+import { startWebsiteFixerWorker } from './workers/websiteFixerWorker';
+import { startUptimePingerWorker } from './workers/uptimePingerWorker';
 import type { Worker } from 'bullmq';
 
 const workers: Worker[] = [];
@@ -16,6 +19,10 @@ export function startAllWorkers(): Worker[] {
     startDeployWorker(),
     startHealthWorker(),
     startFixWorker(),
+    // SEO Platform workers
+    startKeywordHistoryWorker(),
+    startWebsiteFixerWorker(),
+    startUptimePingerWorker(),
   );
 
   console.log(`[Jobs] ${workers.length} workers started`);
@@ -34,3 +41,6 @@ export { startContentWorker } from './workers/contentWorker';
 export { startDeployWorker } from './workers/deployWorker';
 export { startHealthWorker } from './workers/healthWorker';
 export { startFixWorker } from './workers/fixWorker';
+export { startKeywordHistoryWorker } from './workers/keywordHistoryWorker';
+export { startWebsiteFixerWorker } from './workers/websiteFixerWorker';
+export { startUptimePingerWorker } from './workers/uptimePingerWorker';

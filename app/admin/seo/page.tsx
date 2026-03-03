@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Search,
   TrendingUp,
@@ -18,6 +19,9 @@ import {
   AlertCircle,
   Copy,
   X,
+  ShieldCheck,
+  ArrowRight,
+  Activity,
 } from 'lucide-react';
 import {
   LineChart,
@@ -82,6 +86,7 @@ interface PageData {
 }
 
 export default function SEODashboardPage() {
+  const router = useRouter();
   const [websites, setWebsites] = useState<Website[]>([]);
   const [selectedWebsite, setSelectedWebsite] = useState<Website | null>(null);
   const [period, setPeriod] = useState('28d');
@@ -281,6 +286,41 @@ export default function SEODashboardPage() {
       </div>
 
       <div className="max-w-7xl mx-auto px-6 py-6">
+        {/* Tool Navigation Cards */}
+        <div className="grid grid-cols-2 gap-4 mb-6">
+          <button
+            onClick={() => router.push('/admin/seo/tracker')}
+            className="flex items-center gap-4 p-5 bg-zinc-900 border border-zinc-800 hover:border-blue-500/50 rounded-xl text-left transition-all group hover:shadow-lg hover:shadow-blue-500/5"
+          >
+            <div className="p-3 bg-blue-500/20 rounded-xl flex-shrink-0">
+              <BarChart3 className="h-6 w-6 text-blue-400" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-white">SEO Tracker</p>
+              <p className="text-sm text-zinc-400 mt-0.5">
+                Daily performance trends — clicks, impressions, CTR &amp; position from GSC
+              </p>
+            </div>
+            <ArrowRight className="h-5 w-5 text-zinc-600 group-hover:text-blue-400 transition-colors flex-shrink-0" />
+          </button>
+
+          <button
+            onClick={() => router.push('/admin/seo/fixer')}
+            className="flex items-center gap-4 p-5 bg-zinc-900 border border-zinc-800 hover:border-emerald-500/50 rounded-xl text-left transition-all group hover:shadow-lg hover:shadow-emerald-500/5"
+          >
+            <div className="p-3 bg-emerald-500/20 rounded-xl flex-shrink-0">
+              <ShieldCheck className="h-6 w-6 text-emerald-400" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-white">AI Website Fixer</p>
+              <p className="text-sm text-zinc-400 mt-0.5">
+                Automated technical SEO &amp; reliability analysis — health scores, issues &amp; fixes
+              </p>
+            </div>
+            <ArrowRight className="h-5 w-5 text-zinc-600 group-hover:text-emerald-400 transition-colors flex-shrink-0" />
+          </button>
+        </div>
+
         {isLoading ? (
           <div className="flex items-center justify-center py-12">
             <RefreshCw className="h-8 w-8 animate-spin text-emerald-500" />
