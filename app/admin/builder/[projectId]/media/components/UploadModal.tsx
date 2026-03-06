@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef } from 'react';
 import { X, Upload, Image as ImageIcon, Loader2, AlertCircle } from 'lucide-react';
+import { useShallow } from 'zustand/react/shallow';
 import { useBuilderStore, MediaCategory } from '@/stores/useBuilderStore';
 
 interface UploadModalProps {
@@ -11,7 +12,10 @@ interface UploadModalProps {
 }
 
 export default function UploadModal({ projectId, categories, onClose }: UploadModalProps) {
-  const { uploadMedia, isUploadingMedia } = useBuilderStore();
+  const { uploadMedia, isUploadingMedia } = useBuilderStore(useShallow((s) => ({
+    uploadMedia: s.uploadMedia,
+    isUploadingMedia: s.isUploadingMedia,
+  })));
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);

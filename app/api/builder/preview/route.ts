@@ -4,6 +4,36 @@ import { Content, BuilderProject, BuilderComponent } from '@/models';
 import * as babel from '@babel/core';
 import mongoose from 'mongoose';
 
+// Remove blocks that start with a regex match and end with a balanced closing brace
+function removeBalancedBlocks(code: string, pattern: RegExp): string {
+  let result = code;
+  let match;
+  // Reset regex state
+  pattern.lastIndex = 0;
+  while ((match = pattern.exec(result)) !== null) {
+    const start = match.index;
+    // Find the opening brace position
+    const braceStart = result.indexOf('{', start + match[0].length - 1);
+    if (braceStart === -1) break;
+    // Walk forward counting braces to find the balanced closing brace
+    let depth = 1;
+    let pos = braceStart + 1;
+    while (pos < result.length && depth > 0) {
+      if (result[pos] === '{') depth++;
+      else if (result[pos] === '}') depth--;
+      pos++;
+    }
+    // Remove the entire block (including trailing whitespace)
+    const end = pos;
+    const trailing = result.slice(end).match(/^\s*/);
+    const trailingLen = trailing ? trailing[0].length : 0;
+    result = result.slice(0, start) + result.slice(end + trailingLen);
+    // Reset regex to search from the removal point
+    pattern.lastIndex = start;
+  }
+  return result;
+}
+
 // POST - Generate preview HTML for a page
 export async function POST(req: NextRequest) {
   try {
@@ -20,11 +50,12 @@ export async function POST(req: NextRequest) {
     // Pre-process code to fix common AI mistakes before Babel
     let preprocessedCode = code
       // Fix malformed type annotations like "any BlogPost[]" -> "any[]"
-      .replace(/:\s*any\s+\w+\[\]/g, ': any[]')
-      // Remove TypeScript interface declarations before Babel
-      .replace(/interface\s+\w+\s*\{[\s\S]*?\}\s*/g, '')
-      // Remove TypeScript type declarations before Babel
-      .replace(/type\s+\w+\s*=[\s\S]*?;\s*/g, '');
+      .replace(/:\s*any\s+\w+\[\]/g, ': any[]');
+
+    // Remove TypeScript interface declarations (handles nested braces)
+    preprocessedCode = removeBalancedBlocks(preprocessedCode, /interface\s+\w+\s*\{/g);
+    // Remove TypeScript type declarations
+    preprocessedCode = preprocessedCode.replace(/type\s+\w+\s*=[\s\S]*?;\s*/g, '');
 
     // Transpile TSX to JavaScript
     let transpiledCode: string;
@@ -139,10 +170,10 @@ export async function POST(req: NextRequest) {
 
         const transpileComponent = (code: string, varName: string): string => {
           try {
-            const preprocessed = code
-              .replace(/:\s*any\s+\w+\[\]/g, ': any[]')
-              .replace(/interface\s+\w+\s*\{[\s\S]*?\}\s*/g, '')
-              .replace(/type\s+\w+\s*=[\s\S]*?;\s*/g, '');
+            let preprocessed = code
+              .replace(/:\s*any\s+\w+\[\]/g, ': any[]');
+            preprocessed = removeBalancedBlocks(preprocessed, /interface\s+\w+\s*\{/g);
+            preprocessed = preprocessed.replace(/type\s+\w+\s*=[\s\S]*?;\s*/g, '');
 
             const result = babel.transformSync(preprocessed, {
               presets: [

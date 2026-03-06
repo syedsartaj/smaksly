@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Image from 'next/image';
 import { X, Save, Loader2 } from 'lucide-react';
+import { useShallow } from 'zustand/react/shallow';
 import { useBuilderStore, BuilderMedia } from '@/stores/useBuilderStore';
 
 interface EditMediaModalProps {
@@ -11,7 +12,9 @@ interface EditMediaModalProps {
 }
 
 export default function EditMediaModal({ media, onClose }: EditMediaModalProps) {
-  const { updateMedia } = useBuilderStore();
+  const { updateMedia } = useBuilderStore(useShallow((s) => ({
+    updateMedia: s.updateMedia,
+  })));
 
   const [name, setName] = useState(media.name);
   const [alt, setAlt] = useState(media.alt || '');

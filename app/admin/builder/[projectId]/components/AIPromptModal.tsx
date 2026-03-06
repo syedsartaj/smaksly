@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { X, Sparkles, RefreshCw, Lightbulb, Image as ImageIcon } from 'lucide-react';
+import { useShallow } from 'zustand/react/shallow';
 import { useBuilderStore, BuilderMedia } from '@/stores/useBuilderStore';
 import MediaPickerInline from '@/components/builder/MediaPickerInline';
 
@@ -38,7 +39,16 @@ const PROMPT_SUGGESTIONS = [
 
 export function AIPromptModal({ onClose }: AIPromptModalProps) {
   const { currentPage, currentComponent, project, setCode, updatePage, updateComponent, setIsGenerating, generatePreview } =
-    useBuilderStore();
+    useBuilderStore(useShallow((s) => ({
+      currentPage: s.currentPage,
+      currentComponent: s.currentComponent,
+      project: s.project,
+      setCode: s.setCode,
+      updatePage: s.updatePage,
+      updateComponent: s.updateComponent,
+      setIsGenerating: s.setIsGenerating,
+      generatePreview: s.generatePreview,
+    })));
 
   // Determine if we're generating for a page or component
   const isComponentMode = !currentPage && !!currentComponent;
@@ -114,16 +124,9 @@ export function AIPromptModal({ onClose }: AIPromptModalProps) {
           setWarnings(data.data.warnings);
         }
 
-        // Generate preview
-        setTimeout(() => {
-          generatePreview();
-        }, 100);
-
-        // Close modal after a short delay to show success
+        // Close modal - BuilderWorkspace's useEffect will auto-trigger preview
         if (!data.data.warnings?.length) {
-          setTimeout(() => {
-            onClose();
-          }, 500);
+          onClose();
         }
       } else {
         setError(data.error || `Failed to generate ${isComponentMode ? 'component' : 'page'}`);

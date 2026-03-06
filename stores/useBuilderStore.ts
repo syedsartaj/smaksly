@@ -800,12 +800,13 @@ export const selectIsGenerating = (state: BuilderState) => state.isGenerating;
 export const selectPreviewHtml = (state: BuilderState) => state.previewHtml;
 
 // Language Selectors
+const EMPTY_LANGUAGES: LanguageConfig[] = [];
 export const selectCurrentLanguage = (state: BuilderState) => state.currentLanguage;
-export const selectLanguages = (state: BuilderState) => state.project?.settings?.languages || [];
+export const selectLanguages = (state: BuilderState) => state.project?.settings?.languages ?? EMPTY_LANGUAGES;
 export const selectPagesByLanguage = (state: BuilderState) => {
   const lang = state.currentLanguage;
-  const languages = state.project?.settings?.languages || [];
-  if (languages.length <= 1) return state.pages;
+  const languages = state.project?.settings?.languages;
+  if (!languages || languages.length <= 1) return state.pages;
   return state.pages.filter((p) => !p.language || p.language === lang);
 };
 

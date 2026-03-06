@@ -27,6 +27,18 @@ AVAILABLE IMPORTS:
 - lucide-react for icons (import specific icons like: import { Menu, X, ChevronDown } from 'lucide-react')
 - React hooks (useState, useEffect, etc.) - only for Client Components
 
+NEXT.JS 14+ API RULES (CRITICAL - DO NOT USE OLD APIs):
+- next/link: <Link> renders its own <a> tag. NEVER nest <a> inside <Link>.
+  WRONG: <Link href="/about"><a>About</a></Link>
+  CORRECT: <Link href="/about">About</Link>
+  CORRECT: <Link href="/about" className="text-blue-500">About</Link>
+- next/image: DO NOT use layout="responsive" or layout="fill" — these are removed.
+  WRONG: <Image src={img} layout="responsive" width={600} height={400} />
+  CORRECT: <Image src={img} width={600} height={400} className="w-full h-auto" alt="..." />
+  For fill mode: <div className="relative w-full h-64"><Image src={img} fill className="object-cover" alt="..." /></div>
+- Always add alt text to Image components
+- Always add unoptimized prop when using external image URLs
+
 STYLING GUIDELINES:
 - Use Tailwind CSS classes exclusively
 - Follow mobile-first approach: base styles, then sm:, md:, lg:, xl:
@@ -124,7 +136,11 @@ export default function Blogs({ blogs = [], blogBasePath = '/blog' }: BlogListin
     <main>
       {blogs.map((blog) => (
         <article key={blog._id}>
-          {/* blog.title, blog.slug, blog.excerpt, blog.featuredImage, blog.publishedAt, blog.authorName, blog.readingTime, blog.tags */}
+          <Link href={\`\${blogBasePath}/\${blog.slug}\`} className="block">
+            <Image src={blog.featuredImage} width={600} height={400} className="w-full h-48 object-cover" alt={blog.title} unoptimized />
+            <h2>{blog.title}</h2>
+            <p>{blog.excerpt}</p>
+          </Link>
         </article>
       ))}
     </main>
@@ -149,12 +165,12 @@ interface BlogPostData {
 }
 
 interface BlogPostProps {
-  blog: BlogPostData;
+  blog: BlogPostData | null;
   blogBasePath?: string;
 }
 
-export default function BlogPost({ blog = {} as BlogPostData, blogBasePath = '/blog' }: BlogPostProps) {
-  if (!blog._id) {
+export default function BlogPost({ blog, blogBasePath = '/blog' }: BlogPostProps) {
+  if (!blog || !blog._id) {
     return <main className="p-8 text-center">Blog post not found</main>;
   }
 
@@ -217,7 +233,9 @@ export default function Blogs({ blogs = [], blogBasePath = '/blog' }: BlogListin
 - Map over the blogs prop to render posts
 - Use the blogBasePath prop for blog card links: <Link href={\\\`\\\${blogBasePath}/\\\${blog.slug}\\\`}>
   This ensures correct links in both single-language and multi-language sites.
-- Use next/image for featured images`;
+- NEVER nest <a> inside <Link> — Link renders its own <a> in Next.js 14+
+- Use next/image with width/height props (NOT layout="responsive")
+- Add unoptimized prop to Image for external URLs`;
       break;
 
     case 'blog-post':
@@ -236,11 +254,11 @@ interface BlogPostData {
   excerpt?: string; featuredImage?: string; publishedAt?: string;
   authorName?: string; authorBio?: string; readingTime?: number; tags?: string[];
 }
-interface BlogPostProps { blog: BlogPostData; blogBasePath?: string; }
-export default function BlogPost({ blog = {} as BlogPostData, blogBasePath = '/blog' }: BlogPostProps) {
+interface BlogPostProps { blog: BlogPostData | null; blogBasePath?: string; }
+export default function BlogPost({ blog, blogBasePath = '/blog' }: BlogPostProps) {
 \`\`\`
 - Use dangerouslySetInnerHTML to render blog.body HTML content
-- Show a "Blog post not found" message if !blog._id
+- Show a "Blog post not found" message if !blog || !blog._id
 - Use next/image for the featured image
 - Use next/link for navigation links (e.g., back to blog: <Link href={blogBasePath}>Back to Blog</Link>)`;
       break;

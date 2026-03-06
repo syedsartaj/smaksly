@@ -17,6 +17,7 @@ import {
   ChevronUp,
   Save,
 } from 'lucide-react';
+import { useShallow } from 'zustand/react/shallow';
 import { useBuilderStore } from '@/stores/useBuilderStore';
 import MediaGrid from './components/MediaGrid';
 import MediaList from './components/MediaList';
@@ -48,7 +49,26 @@ export default function MediaPage() {
     setActiveCategory,
     deleteMedia,
     clearMediaSelection,
-  } = useBuilderStore();
+  } = useBuilderStore(useShallow((s) => ({
+    project: s.project,
+    media: s.media,
+    mediaCategories: s.mediaCategories,
+    mediaViewMode: s.mediaViewMode,
+    mediaSearchTerm: s.mediaSearchTerm,
+    activeCategory: s.activeCategory,
+    isLoadingMedia: s.isLoadingMedia,
+    isUploadingMedia: s.isUploadingMedia,
+    selectedMediaIds: s.selectedMediaIds,
+    branding: s.branding,
+    loadProject: s.loadProject,
+    loadMedia: s.loadMedia,
+    loadBranding: s.loadBranding,
+    setMediaViewMode: s.setMediaViewMode,
+    setMediaSearchTerm: s.setMediaSearchTerm,
+    setActiveCategory: s.setActiveCategory,
+    deleteMedia: s.deleteMedia,
+    clearMediaSelection: s.clearMediaSelection,
+  })));
 
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showBranding, setShowBranding] = useState(true);

@@ -3,6 +3,7 @@
 import { useRef, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import type { OnMount, OnChange } from '@monaco-editor/react';
+import { useShallow } from 'zustand/react/shallow';
 import { useBuilderStore, CodeSelection } from '@/stores/useBuilderStore';
 
 // Dynamic import to avoid SSR issues with Monaco
@@ -13,7 +14,12 @@ interface EditorPanelProps {
 }
 
 export function EditorPanel({ onSelectionChange }: EditorPanelProps) {
-  const { code, currentPage, currentComponent, setCode } = useBuilderStore();
+  const { code, currentPage, currentComponent, setCode } = useBuilderStore(useShallow((s) => ({
+    code: s.code,
+    currentPage: s.currentPage,
+    currentComponent: s.currentComponent,
+    setCode: s.setCode,
+  })));
   const editorRef = useRef<unknown>(null);
 
   // Determine if we have something to edit

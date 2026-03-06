@@ -15,7 +15,8 @@ import {
   Image as ImageIcon,
 } from 'lucide-react';
 import Link from 'next/link';
-import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels';
+// react-resizable-panels removed in favor of flex layout for editor/preview/AI panels
+import { useShallow } from 'zustand/react/shallow';
 import { useBuilderStore } from '@/stores/useBuilderStore';
 import { EditorPanel } from './components/EditorPanel';
 import { PreviewPanel } from './components/PreviewPanel';
@@ -48,7 +49,25 @@ export default function BuilderWorkspace() {
     saveCurrentCode,
     generatePreview,
     setSelectedCode,
-  } = useBuilderStore();
+  } = useBuilderStore(useShallow((s) => ({
+    project: s.project,
+    currentPage: s.currentPage,
+    currentComponent: s.currentComponent,
+    code: s.code,
+    isDirty: s.isDirty,
+    isLoadingProjects: s.isLoadingProjects,
+    showFileTree: s.showFileTree,
+    showAIPanel: s.showAIPanel,
+    selectedCode: s.selectedCode,
+    isGenerating: s.isGenerating,
+    toggleFileTree: s.toggleFileTree,
+    toggleAIPanel: s.toggleAIPanel,
+    loadProject: s.loadProject,
+    loadBranding: s.loadBranding,
+    saveCurrentCode: s.saveCurrentCode,
+    generatePreview: s.generatePreview,
+    setSelectedCode: s.setSelectedCode,
+  })));
 
   const [showAIPromptModal, setShowAIPromptModal] = useState(false);
   const [showPublishModal, setShowPublishModal] = useState(false);
@@ -284,31 +303,32 @@ export default function BuilderWorkspace() {
         )}
 
         {/* Editor and Preview Panels */}
-        <PanelGroup orientation="horizontal" className="flex-1">
-          {/* Editor Panel */}
-          <Panel defaultSize={showAIPanel ? 45 : 55} minSize={30}>
+        <div className="flex-1 flex overflow-hidden">
+          {/* Editor */}
+          <div className={`${showAIPanel ? 'w-[40%]' : 'w-[55%]'} flex-shrink-0 transition-all duration-200`}>
             <EditorPanel
               onSelectionChange={(selection) => setSelectedCode(selection)}
             />
-          </Panel>
+          </div>
 
-          <PanelResizeHandle className="w-2 bg-zinc-800 hover:bg-emerald-600 cursor-col-resize transition-colors" />
+          {/* Resize Handle (visual only) */}
+          <div className="w-1 bg-zinc-800 flex-shrink-0" />
 
-          {/* Preview Panel */}
-          <Panel defaultSize={showAIPanel ? 35 : 45} minSize={25}>
+          {/* Preview */}
+          <div className={`${showAIPanel ? 'flex-1 min-w-0' : 'flex-1'} transition-all duration-200`}>
             <PreviewPanel />
-          </Panel>
+          </div>
 
           {/* AI Edit Panel */}
           {showAIPanel && (
             <>
-              <PanelResizeHandle className="w-2 bg-zinc-800 hover:bg-emerald-600 cursor-col-resize transition-colors" />
-              <Panel defaultSize={20} minSize={15} maxSize={35}>
+              <div className="w-1 bg-zinc-800 flex-shrink-0" />
+              <div className="w-[320px] flex-shrink-0 overflow-hidden">
                 <AIEditPanel onClose={toggleAIPanel} />
-              </Panel>
+              </div>
             </>
           )}
-        </PanelGroup>
+        </div>
       </div>
 
       {/* Modals */}

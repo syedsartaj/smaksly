@@ -631,6 +631,15 @@ export default function RootLayout({
 
     let pageCode = page.code as string;
 
+    // Sanitize common AI-generated code issues for all page types
+    pageCode = pageCode
+      // Fix <Link><a>...</a></Link> → <Link>...</Link> (Next.js 13+ Link renders its own <a>)
+      .replace(/<Link(\s[^>]*)>\s*<a[^>]*>([\s\S]*?)<\/a>\s*<\/Link>/g, '<Link$1>$2</Link>')
+      // Remove deprecated layout prop from next/image
+      .replace(/\s+layout\s*=\s*"(responsive|fill|fixed|intrinsic)"/g, '')
+      // Remove deprecated objectFit prop from next/image
+      .replace(/\s+objectFit\s*=\s*"[^"]*"/g, '');
+
     // --- Blog listing pages: wrap with server-side data fetching ---
     if (pageType === 'blog-listing') {
       // Save AI-generated component as a client component
@@ -687,6 +696,29 @@ export default async function BlogListingPage() {
       if (!clientCode.trimStart().startsWith("'use client'") && !clientCode.trimStart().startsWith('"use client"')) {
         clientCode = "'use client';\n\n" + clientCode;
       }
+      // Fix common AI-generated type issues for blog-post client components:
+      // 1. Fix `blog = {}` or `blog = {} as X` patterns that cause TS errors
+      clientCode = clientCode
+        .replace(/\{\s*blog\s*=\s*\{\}\s*as\s*\w+\s*/g, '{ blog ')
+        .replace(/\{\s*blog\s*=\s*\{\}\s*/g, '{ blog ');
+
+      // 2. Ensure the function signature has proper typing for `blog` prop
+      //    Match patterns like `function BlogPost({ blog, ...` or `function BlogPost({ blog })`
+      //    and add `: { blog: any; [key: string]: any }` if no type annotation exists
+      if (!clientCode.match(/\}\s*:\s*\w+/)) {
+        // No type annotation on destructured props — add one
+        clientCode = clientCode.replace(
+          /export\s+default\s+function\s+\w+\s*\(\s*\{([^}]*)\}\s*\)\s*\{/,
+          (match, params) => {
+            return match.replace(`{${params}}`, `{${params}}: { blog: any; blogBasePath?: string; [key: string]: any }`);
+          }
+        );
+      }
+
+      // 3. Ensure there's a null guard for blog._id access
+      if (clientCode.includes('blog._id') && !clientCode.includes('!blog ||') && !clientCode.includes('!blog||')) {
+        clientCode = clientCode.replace(/if\s*\(\s*!blog\._id\s*\)/g, 'if (!blog || !blog._id)');
+      }
       await fs.writeFile(path.join(dirPath, 'BlogPostClient.tsx'), clientCode);
 
       // Create server page.tsx with dynamic slug extraction and metadata
@@ -718,7 +750,7 @@ export async function generateMetadata({ params }: BlogPostPageProps): Promise<M
 
 export default async function BlogPostPage({ params }: BlogPostPageProps) {
   const blog = await getBlogBySlug(params.slug);
-  return <BlogPostClient blog={blog || {}} blogBasePath={\`/\${params.lang}/blog\`} />;
+  return <BlogPostClient blog={blog || null} blogBasePath={\`/\${params.lang}/blog\`} />;
 }
 `;
       } else {
@@ -748,7 +780,7 @@ export async function generateMetadata({ params }: BlogPostPageProps): Promise<M
 
 export default async function BlogPostPage({ params }: BlogPostPageProps) {
   const blog = await getBlogBySlug(params.slug);
-  return <BlogPostClient blog={blog || {}} />;
+  return <BlogPostClient blog={blog || null} />;
 }
 `;
       }
@@ -1044,6 +1076,37 @@ export async function getPages(): Promise<SitemapPage[]> {
     return [];
   }
 }
+
+// Fetch ALL blogs for sitemap (paginates through all pages, skips dummy data)
+export async function getAllBlogsForSitemap(): Promise<BlogPost[]> {
+  const allBlogs: BlogPost[] = [];
+  let page = 1;
+  const limit = 50;
+
+  try {
+    while (true) {
+      const res = await fetch(
+        \`\${SMAKSLY_API}/api/builder/blogs?projectId=\${PROJECT_ID}&page=\${page}&limit=\${limit}&skipDummy=true\`,
+        { next: { revalidate: 60 } }
+      );
+
+      if (!res.ok) break;
+
+      const data = await res.json();
+      const blogs = data.data || [];
+      if (blogs.length === 0) break;
+
+      allBlogs.push(...blogs);
+
+      if (!data.pagination?.hasMore) break;
+      page++;
+    }
+  } catch (error) {
+    console.error('Error fetching all blogs for sitemap:', error);
+  }
+
+  return allBlogs;
+}
 `;
   await fs.writeFile(path.join(projectPath, 'lib', 'api.ts'), apiClientCode);
 
@@ -1125,7 +1188,7 @@ function generateSitemapCode(
 
   if (isMultiLang) {
     return `import { MetadataRoute } from 'next';
-import { getPages${hasBlogPages ? ', getBlogs' : ''} } from '@/lib/api';
+import { getPages${hasBlogPages ? ', getAllBlogsForSitemap' : ''} } from '@/lib/api';
 
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || '${project.deploymentUrl || ''}';
 const LANGUAGES = ${JSON.stringify(langCodes)};
@@ -1134,6 +1197,8 @@ const DEFAULT_LANG = '${defaultLanguage}';
 export const revalidate = 60;
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  if (!BASE_URL) return [];
+
   const entries: MetadataRoute.Sitemap = [];
 
   // Dynamic pages from API
@@ -1154,9 +1219,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     });
   }
 ${hasBlogPages ? `
-  // Dynamic blog posts
+  // Dynamic blog posts (fetches ALL pages, skips dummy data)
   try {
-    const { blogs } = await getBlogs(1, 100);
+    const blogs = await getAllBlogsForSitemap();
     for (const blog of blogs) {
       const languages: Record<string, string> = {};
       for (const lang of LANGUAGES) {
@@ -1179,13 +1244,15 @@ ${hasBlogPages ? `
 `;
   } else {
     return `import { MetadataRoute } from 'next';
-import { getPages${hasBlogPages ? ', getBlogs' : ''} } from '@/lib/api';
+import { getPages${hasBlogPages ? ', getAllBlogsForSitemap' : ''} } from '@/lib/api';
 
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || '${project.deploymentUrl || ''}';
 
 export const revalidate = 60;
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  if (!BASE_URL) return [];
+
   const entries: MetadataRoute.Sitemap = [];
 
   // Dynamic pages from API
@@ -1200,9 +1267,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     });
   }
 ${hasBlogPages ? `
-  // Dynamic blog posts
+  // Dynamic blog posts (fetches ALL pages, skips dummy data)
   try {
-    const { blogs } = await getBlogs(1, 100);
+    const blogs = await getAllBlogsForSitemap();
     for (const blog of blogs) {
       entries.push({
         url: \`\${BASE_URL}/blog/\${blog.slug}\`,
@@ -1236,7 +1303,7 @@ export default function robots(): MetadataRoute.Robots {
         disallow: ['/api/', '/_next/'],
       },
     ],
-    sitemap: \`\${BASE_URL}/sitemap.xml\`,
+    ...(BASE_URL ? { sitemap: \`\${BASE_URL}/sitemap.xml\` } : {}),
   };
 }
 `;

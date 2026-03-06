@@ -14,7 +14,9 @@ import {
   Newspaper,
   Globe,
 } from 'lucide-react';
-import { useBuilderStore, BuilderPage, BuilderComponent, selectPagesByLanguage, selectLanguages, selectCurrentLanguage } from '@/stores/useBuilderStore';
+import { useMemo } from 'react';
+import { useShallow } from 'zustand/react/shallow';
+import { useBuilderStore, BuilderPage, BuilderComponent } from '@/stores/useBuilderStore';
 
 const PAGE_TYPE_ICONS: Record<string, React.ElementType> = {
   static: FileText,
@@ -40,10 +42,29 @@ export function FileTree() {
     setOriginalCode,
     currentLanguage,
     setCurrentLanguage,
-  } = useBuilderStore();
+  } = useBuilderStore(useShallow((s) => ({
+    pages: s.pages,
+    components: s.components,
+    currentPage: s.currentPage,
+    currentComponent: s.currentComponent,
+    setCurrentPage: s.setCurrentPage,
+    setCurrentComponent: s.setCurrentComponent,
+    addPage: s.addPage,
+    deletePage: s.deletePage,
+    addComponent: s.addComponent,
+    deleteComponent: s.deleteComponent,
+    project: s.project,
+    setCode: s.setCode,
+    setOriginalCode: s.setOriginalCode,
+    currentLanguage: s.currentLanguage,
+    setCurrentLanguage: s.setCurrentLanguage,
+  })));
 
-  const languages = useBuilderStore(selectLanguages);
-  const filteredPages = useBuilderStore(selectPagesByLanguage);
+  const languages = useMemo(() => project?.settings?.languages || [], [project?.settings?.languages]);
+  const filteredPages = useMemo(() => {
+    if (languages.length <= 1) return pages;
+    return pages.filter((p) => !p.language || p.language === currentLanguage);
+  }, [pages, languages, currentLanguage]);
   const hasMultipleLanguages = languages.length > 1;
 
   const [expandedSections, setExpandedSections] = useState({
@@ -60,7 +81,7 @@ export function FileTree() {
   // Component creation state
   const [showNewComponentForm, setShowNewComponentForm] = useState(false);
   const [newComponentName, setNewComponentName] = useState('');
-  const [newComponentType, setNewComponentType] = useState<'layout' | 'section' | 'element' | 'widget'>('layout');
+  const [newComponentType, setNewComponentType] = useState<'header' | 'footer'>('header');
   const [newComponentDescription, setNewComponentDescription] = useState('');
   const [generateWithAI, setGenerateWithAI] = useState(true);
   const [isCreatingComponent, setIsCreatingComponent] = useState(false);
@@ -137,21 +158,28 @@ export function FileTree() {
     try {
       setIsCreatingComponent(true);
 
+      // Convert name to PascalCase (e.g., "header" -> "Header", "my footer" -> "MyFooter")
+      const pascalName = newComponentName
+        .trim()
+        .split(/[\s_-]+/)
+        .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+        .join('');
+
       const requestBody: Record<string, unknown> = {
         projectId: project._id,
-        name: newComponentName.trim(),
-        type: newComponentType,
+        name: pascalName,
+        type: 'layout',
       };
 
       if (generateWithAI) {
         requestBody.generateWithAI = true;
         requestBody.aiDescription = newComponentDescription.trim();
       } else {
-        requestBody.code = `// ${newComponentName} Component
-export default function ${newComponentName}() {
+        requestBody.code = `// ${pascalName} Component
+export default function ${pascalName}() {
   return (
     <div>
-      {/* ${newComponentName} content */}
+      {/* ${pascalName} content */}
     </div>
   );
 }`;
@@ -406,16 +434,26 @@ export default function ${newComponentName}() {
               <span>Components</span>
               <span className="text-xs text-zinc-600">({components.length})</span>
             </div>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowNewComponentForm(true);
-              }}
-              className="p-1 hover:bg-zinc-700 rounded transition-colors"
-              title="Add Component"
-            >
-              <Plus className="h-3 w-3" />
-            </button>
+            {(() => {
+              const hasHeader = components.some((c: BuilderComponent) => c.name.toLowerCase() === 'header');
+              const hasFooter = components.some((c: BuilderComponent) => c.name.toLowerCase() === 'footer');
+              if (hasHeader && hasFooter) return null;
+              return (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const defaultType = !hasHeader ? 'header' : 'footer';
+                    setNewComponentType(defaultType as 'header' | 'footer');
+                    setNewComponentName(defaultType === 'header' ? 'Header' : 'Footer');
+                    setShowNewComponentForm(true);
+                  }}
+                  className="p-1 hover:bg-zinc-700 rounded transition-colors"
+                  title="Add Component"
+                >
+                  <Plus className="h-3 w-3" />
+                </button>
+              );
+            })()}
           </div>
 
           {expandedSections.components && (
@@ -423,24 +461,25 @@ export default function ${newComponentName}() {
               {/* New Component Form */}
               {showNewComponentForm && (
                 <div className="px-3 py-2 space-y-2 bg-zinc-800/50">
-                  <input
-                    type="text"
-                    placeholder="Component name (e.g., Header)"
-                    value={newComponentName}
-                    onChange={(e) => setNewComponentName(e.target.value)}
-                    className="w-full px-2 py-1 bg-zinc-700 border border-zinc-600 rounded text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500"
-                    autoFocus
-                  />
-                  <select
-                    value={newComponentType}
-                    onChange={(e) => setNewComponentType(e.target.value as typeof newComponentType)}
-                    className="w-full px-2 py-1 bg-zinc-700 border border-zinc-600 rounded text-sm text-white focus:outline-none focus:border-emerald-500"
-                  >
-                    <option value="layout">Layout (Header, Footer, Nav)</option>
-                    <option value="section">Section (Hero, Features)</option>
-                    <option value="element">Element (Button, Card)</option>
-                    <option value="widget">Widget (Newsletter, Social)</option>
-                  </select>
+                  {(() => {
+                    const hasHeader = components.some((c: BuilderComponent) => c.name.toLowerCase() === 'header');
+                    const hasFooter = components.some((c: BuilderComponent) => c.name.toLowerCase() === 'footer');
+                    return (
+                      <select
+                        value={newComponentType}
+                        onChange={(e) => {
+                          const val = e.target.value as 'header' | 'footer';
+                          setNewComponentType(val);
+                          setNewComponentName(val === 'header' ? 'Header' : 'Footer');
+                        }}
+                        className="w-full px-2 py-1 bg-zinc-700 border border-zinc-600 rounded text-sm text-white focus:outline-none focus:border-emerald-500"
+                        autoFocus
+                      >
+                        <option value="header" disabled={hasHeader}>Header{hasHeader ? ' (already exists)' : ''}</option>
+                        <option value="footer" disabled={hasFooter}>Footer{hasFooter ? ' (already exists)' : ''}</option>
+                      </select>
+                    );
+                  })()}
 
                   {/* AI Generation Toggle */}
                   <label className="flex items-center gap-2 cursor-pointer">
@@ -457,11 +496,9 @@ export default function ${newComponentName}() {
                   {generateWithAI && (
                     <textarea
                       placeholder={
-                        newComponentType === 'layout' && newComponentName.toLowerCase().includes('header')
+                        newComponentType === 'header'
                           ? "E.g., Modern sticky header with logo, navigation links (Home, About, Blog, Contact), mobile menu, and a CTA button"
-                          : newComponentType === 'layout' && newComponentName.toLowerCase().includes('footer')
-                          ? "E.g., Dark footer with company info, quick links, contact details, newsletter signup, and social icons"
-                          : "Describe the component you want to create..."
+                          : "E.g., Dark footer with company info, quick links, contact details, newsletter signup, and social icons"
                       }
                       value={newComponentDescription}
                       onChange={(e) => setNewComponentDescription(e.target.value)}
@@ -473,7 +510,7 @@ export default function ${newComponentName}() {
                   <div className="flex gap-2">
                     <button
                       onClick={handleCreateComponent}
-                      disabled={!newComponentName.trim() || isCreatingComponent || (generateWithAI && !newComponentDescription.trim())}
+                      disabled={isCreatingComponent || (generateWithAI && !newComponentDescription.trim())}
                       className={`flex-1 px-2 py-1 text-white text-xs rounded transition-colors disabled:opacity-50 ${
                         generateWithAI
                           ? 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700'

@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
 import { Smartphone, Tablet, Monitor, RefreshCw, AlertCircle, ExternalLink } from 'lucide-react';
+import { useShallow } from 'zustand/react/shallow';
 import { useBuilderStore } from '@/stores/useBuilderStore';
 
 const VIEWPORT_SIZES = {
@@ -11,8 +11,6 @@ const VIEWPORT_SIZES = {
 };
 
 export function PreviewPanel() {
-  const iframeRef = useRef<HTMLIFrameElement>(null);
-
   const {
     previewHtml,
     isPreviewLoading,
@@ -21,19 +19,15 @@ export function PreviewPanel() {
     setViewportSize,
     generatePreview,
     project,
-  } = useBuilderStore();
-
-  // Update iframe content when preview HTML changes
-  useEffect(() => {
-    if (iframeRef.current && previewHtml) {
-      const doc = iframeRef.current.contentDocument;
-      if (doc) {
-        doc.open();
-        doc.write(previewHtml);
-        doc.close();
-      }
-    }
-  }, [previewHtml]);
+  } = useBuilderStore(useShallow((s) => ({
+    previewHtml: s.previewHtml,
+    isPreviewLoading: s.isPreviewLoading,
+    previewError: s.previewError,
+    viewportSize: s.viewportSize,
+    setViewportSize: s.setViewportSize,
+    generatePreview: s.generatePreview,
+    project: s.project,
+  })));
 
   return (
     <div className="h-full flex flex-col bg-zinc-900">
@@ -139,10 +133,10 @@ export function PreviewPanel() {
             }}
           >
             <iframe
-              ref={iframeRef}
               className="w-full h-full border-0"
               title="Page Preview"
               sandbox="allow-scripts allow-same-origin"
+              srcDoc={previewHtml}
             />
           </div>
         )}

@@ -12,11 +12,17 @@ import {
   RefreshCw,
   Search,
 } from 'lucide-react';
+import { useShallow } from 'zustand/react/shallow';
 import { useBuilderStore, BuilderProject } from '@/stores/useBuilderStore';
 
 export default function BuilderProjectsPage() {
   const router = useRouter();
-  const { projects, setProjects, isLoadingProjects, setLoadingProjects } = useBuilderStore();
+  const { projects, setProjects, isLoadingProjects, setLoadingProjects } = useBuilderStore(useShallow((s) => ({
+    projects: s.projects,
+    setProjects: s.setProjects,
+    isLoadingProjects: s.isLoadingProjects,
+    setLoadingProjects: s.setLoadingProjects,
+  })));
 
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('');

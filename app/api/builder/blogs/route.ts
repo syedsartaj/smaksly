@@ -30,6 +30,7 @@ export async function GET(req: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1', 10);
     const limit = Math.min(parseInt(searchParams.get('limit') || '12', 10), 50);
     const slug = searchParams.get('slug');
+    const skipDummy = searchParams.get('skipDummy') === 'true';
 
     let targetWebsiteId: string | null = websiteId;
 
@@ -105,8 +106,8 @@ export async function GET(req: NextRequest) {
       Content.countDocuments(query),
     ]);
 
-    // Return dummy data if no blogs exist (for preview purposes)
-    if (blogs.length === 0 && total === 0) {
+    // Return dummy data if no blogs exist (for preview purposes only, not sitemap)
+    if (blogs.length === 0 && total === 0 && !skipDummy) {
       const dummyBlogs = generateDummyBlogs(6);
       return NextResponse.json({
         success: true,

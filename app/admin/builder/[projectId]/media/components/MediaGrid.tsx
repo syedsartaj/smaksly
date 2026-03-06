@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Image from 'next/image';
 import { Check, MoreVertical, Pencil, Trash2, Copy, ExternalLink, CheckCircle } from 'lucide-react';
+import { useShallow } from 'zustand/react/shallow';
 import { useBuilderStore, BuilderMedia } from '@/stores/useBuilderStore';
 import EditMediaModal from './EditMediaModal';
 
@@ -12,7 +13,11 @@ interface MediaGridProps {
 }
 
 export default function MediaGrid({ media, projectId }: MediaGridProps) {
-  const { selectedMediaIds, toggleMediaSelection, deleteMedia } = useBuilderStore();
+  const { selectedMediaIds, toggleMediaSelection, deleteMedia } = useBuilderStore(useShallow((s) => ({
+    selectedMediaIds: s.selectedMediaIds,
+    toggleMediaSelection: s.toggleMediaSelection,
+    deleteMedia: s.deleteMedia,
+  })));
   const [editingMedia, setEditingMedia] = useState<BuilderMedia | null>(null);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);

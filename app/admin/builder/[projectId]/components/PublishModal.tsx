@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { X, Upload, RefreshCw, Github, ExternalLink, CheckCircle, AlertCircle } from 'lucide-react';
+import { useShallow } from 'zustand/react/shallow';
 import { useBuilderStore } from '@/stores/useBuilderStore';
 
 interface PublishModalProps {
@@ -9,7 +10,12 @@ interface PublishModalProps {
 }
 
 export function PublishModal({ onClose }: PublishModalProps) {
-  const { project, pages, components, setProject } = useBuilderStore();
+  const { project, pages, components, setProject } = useBuilderStore(useShallow((s) => ({
+    project: s.project,
+    pages: s.pages,
+    components: s.components,
+    setProject: s.setProject,
+  })));
 
   const [commitMessage, setCommitMessage] = useState('');
   const [isPublishing, setIsPublishing] = useState(false);

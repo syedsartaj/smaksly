@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { X, Settings, Palette, Type, Save, RefreshCw, Globe, Share2, Plus, Trash2 } from 'lucide-react';
+import { useShallow } from 'zustand/react/shallow';
 import { useBuilderStore, LanguageConfig } from '@/stores/useBuilderStore';
 
 interface SettingsModalProps {
@@ -22,7 +23,11 @@ const FONT_OPTIONS = [
 ];
 
 export function SettingsModal({ onClose }: SettingsModalProps) {
-  const { project, setProject, generatePreview } = useBuilderStore();
+  const { project, setProject, generatePreview } = useBuilderStore(useShallow((s) => ({
+    project: s.project,
+    setProject: s.setProject,
+    generatePreview: s.generatePreview,
+  })));
 
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);

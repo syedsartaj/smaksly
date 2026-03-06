@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { Save, Loader2, Upload, X, Image as ImageIcon } from 'lucide-react';
+import { useShallow } from 'zustand/react/shallow';
 import { useBuilderStore, BrandingSettings } from '@/stores/useBuilderStore';
 
 interface BrandingSectionProps {
@@ -10,7 +11,14 @@ interface BrandingSectionProps {
 }
 
 export default function BrandingSection({ projectId }: BrandingSectionProps) {
-  const { branding, saveBranding, loadBranding, media, loadMedia, generatePreview } = useBuilderStore();
+  const { branding, saveBranding, loadBranding, media, loadMedia, generatePreview } = useBuilderStore(useShallow((s) => ({
+    branding: s.branding,
+    saveBranding: s.saveBranding,
+    loadBranding: s.loadBranding,
+    media: s.media,
+    loadMedia: s.loadMedia,
+    generatePreview: s.generatePreview,
+  })));
 
   const [formData, setFormData] = useState<BrandingSettings>({
     headerLogo: '',
