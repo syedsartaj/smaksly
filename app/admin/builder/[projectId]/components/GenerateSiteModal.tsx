@@ -46,17 +46,18 @@ export function GenerateSiteModal({ onClose }: GenerateSiteModalProps) {
 
     const steps = [
       { delay: 0, step: 'planning', detail: 'Analyzing your requirements...', progress: 5 },
-      { delay: 5000, step: 'planning', detail: 'Creating site architecture...', progress: 10 },
-      { delay: 10000, step: 'components', detail: 'Designing Header & Footer...', progress: 18 },
-      { delay: 20000, step: 'components', detail: 'Generating navigation & layout...', progress: 28 },
-      { delay: 30000, step: 'pages', detail: 'Building Home page...', progress: 35 },
-      { delay: 45000, step: 'pages', detail: 'Generating inner pages...', progress: 45 },
-      { delay: 60000, step: 'pages', detail: 'Creating content sections...', progress: 55 },
-      { delay: 80000, step: 'pages', detail: 'Building more pages...', progress: 65 },
-      { delay: 100000, step: 'pages', detail: 'Finalizing pages...', progress: 75 },
-      { delay: 120000, step: 'pages', detail: 'Polishing content...', progress: 82 },
-      { delay: 140000, step: 'pages', detail: 'Almost done...', progress: 88 },
+      { delay: 5000, step: 'planning', detail: 'Creating site architecture...', progress: 12 },
+      { delay: 12000, step: 'components', detail: 'Designing Header & Footer...', progress: 22 },
+      { delay: 20000, step: 'pages', detail: 'Building Home page...', progress: 35 },
+      { delay: 30000, step: 'pages', detail: 'Generating inner pages...', progress: 45 },
+      { delay: 40000, step: 'pages', detail: 'Creating content sections...', progress: 55 },
+      { delay: 55000, step: 'pages', detail: 'Building more pages...', progress: 65 },
+      { delay: 70000, step: 'pages', detail: 'Finalizing pages...', progress: 75 },
+      { delay: 90000, step: 'pages', detail: 'Polishing content...', progress: 82 },
+      { delay: 120000, step: 'pages', detail: 'Almost done...', progress: 88 },
       { delay: 160000, step: 'pages', detail: 'Wrapping up...', progress: 92 },
+      { delay: 240000, step: 'pages', detail: 'Still working...', progress: 95 },
+      { delay: 360000, step: 'pages', detail: 'Taking longer than usual...', progress: 97 },
     ];
 
     const timers = steps.map(({ delay, ...state }) =>

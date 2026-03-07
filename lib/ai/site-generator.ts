@@ -126,27 +126,25 @@ export async function generateFullSite(params: {
     colorScheme: plan.data.designSystem.colorScheme,
   };
 
-  // Generate header then footer sequentially (account has tight rate limits)
-  const headerResult = await generateComponent(
-    createHeaderPrompt({
-      ...designCtx,
-      description: headerDef?.description || 'Modern sticky header with navigation',
-      navLinks,
-    }),
-    'Header'
-  );
-  // Delay between calls to let rate limit tokens replenish
-  await new Promise((r) => setTimeout(r, 10000));
-
-  progress('components', 'Generating Footer...', 28);
-  const footerResult = await generateComponent(
-    createFooterPrompt({
-      ...designCtx,
-      description: footerDef?.description || 'Professional footer with links and contact info',
-      navLinks,
-    }),
-    'Footer'
-  );
+  // Generate header and footer in parallel to save time
+  const [headerResult, footerResult] = await Promise.all([
+    generateComponent(
+      createHeaderPrompt({
+        ...designCtx,
+        description: headerDef?.description || 'Modern sticky header with navigation',
+        navLinks,
+      }),
+      'Header'
+    ),
+    generateComponent(
+      createFooterPrompt({
+        ...designCtx,
+        description: footerDef?.description || 'Professional footer with links and contact info',
+        navLinks,
+      }),
+      'Footer'
+    ),
+  ]);
 
   totalTokens += headerResult.tokensUsed + footerResult.tokensUsed;
   const components: GeneratedComponent[] = [headerResult.component, footerResult.component];
@@ -158,54 +156,64 @@ export async function generateFullSite(params: {
   const totalPages = plan.data.pages.length;
   const allPageInfo = plan.data.pages.map((p) => ({ name: p.name, path: p.path }));
 
-  // Generate pages one at a time with delay (account has tight rate limits)
-  for (let i = 0; i < plan.data.pages.length; i++) {
-    const pageDef = plan.data.pages[i];
-    const progressPct = 35 + ((i + 1) / totalPages) * 55;
-    progress('pages', `Generating ${pageDef.name} (${i + 1}/${totalPages})...`, Math.round(progressPct));
+  // Generate pages in parallel batches of 2 for speed
+  const BATCH_SIZE = 2;
+  for (let i = 0; i < plan.data.pages.length; i += BATCH_SIZE) {
+    const batch = plan.data.pages.slice(i, i + BATCH_SIZE);
+    const progressPct = 35 + ((i + batch.length) / totalPages) * 55;
+    progress('pages', `Generating ${batch.map((p) => p.name).join(' & ')} (${Math.min(i + BATCH_SIZE, totalPages)}/${totalPages})...`, Math.round(progressPct));
 
-    // Delay between pages to avoid rate limits (skip for first page)
-    if (i > 0) await new Promise((r) => setTimeout(r, 10000));
+    // Small delay between batches (skip for first batch)
+    if (i > 0) await new Promise((r) => setTimeout(r, 2000));
 
-    let prompt: string;
+    const batchResults = await Promise.all(
+      batch.map((pageDef) => {
+        let prompt: string;
 
-    if (pageDef.type === 'blog-listing') {
-      prompt = createBlogListingPrompt({
-        ...designCtx,
-        description: pageDef.description,
-      });
-    } else if (pageDef.type === 'blog-post') {
-      prompt = createBlogPostPrompt({
-        ...designCtx,
-        description: pageDef.description,
-      });
-    } else {
-      prompt = createPagePrompt({
-        ...designCtx,
-        pageName: pageDef.name,
-        pagePath: pageDef.path,
-        pageType: pageDef.type,
+        if (pageDef.type === 'blog-listing') {
+          prompt = createBlogListingPrompt({
+            ...designCtx,
+            description: pageDef.description,
+          });
+        } else if (pageDef.type === 'blog-post') {
+          prompt = createBlogPostPrompt({
+            ...designCtx,
+            description: pageDef.description,
+          });
+        } else {
+          prompt = createPagePrompt({
+            ...designCtx,
+            pageName: pageDef.name,
+            pagePath: pageDef.path,
+            pageType: pageDef.type,
+            sections: pageDef.sections,
+            description: pageDef.description,
+            allPages: allPageInfo,
+          });
+        }
+
+        return generatePageCode(prompt, pageDef.name).then((result) => ({
+          pageDef,
+          result,
+        }));
+      })
+    );
+
+    for (const { pageDef, result } of batchResults) {
+      totalTokens += result.tokensUsed;
+      pages.push({
+        name: pageDef.name,
+        path: pageDef.path,
+        type: pageDef.type,
+        isHomePage: pageDef.isHomePage,
+        code: result.code,
+        isValid: result.isValid,
+        warnings: result.warnings,
+        errors: result.errors,
         sections: pageDef.sections,
         description: pageDef.description,
-        allPages: allPageInfo,
       });
     }
-
-    const result = await generatePageCode(prompt, pageDef.name);
-    totalTokens += result.tokensUsed;
-
-    pages.push({
-      name: pageDef.name,
-      path: pageDef.path,
-      type: pageDef.type,
-      isHomePage: pageDef.isHomePage,
-      code: result.code,
-      isValid: result.isValid,
-      warnings: result.warnings,
-      errors: result.errors,
-      sections: pageDef.sections,
-      description: pageDef.description,
-    });
   }
 
   // Collect errors
@@ -322,7 +330,7 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 4): Promise<T> {
         // Try to extract retry-after from error, default to escalating waits
         const retryMatch = errMsg.match(/retry.after.*?(\d+)/i);
         const suggestedWait = retryMatch ? parseInt(retryMatch[1]) * 1000 : 0;
-        const delay = Math.max(suggestedWait, (i + 1) * 30000); // At least 30s, 60s, 90s
+        const delay = Math.max(suggestedWait, (i + 1) * 10000); // At least 10s, 20s, 30s
         console.log(`Rate limited, waiting ${Math.round(delay / 1000)}s before retry ${i + 2}/${retries}...`);
         await new Promise((r) => setTimeout(r, delay));
         continue;

@@ -4,8 +4,8 @@ import { BuilderProject, BuilderPage, BuilderComponent } from '@/models';
 import { generateFullSite } from '@/lib/ai/site-generator';
 import mongoose from 'mongoose';
 
-// Allow up to 5 minutes for site generation
-export const maxDuration = 300;
+// Allow up to 10 minutes for site generation
+export const maxDuration = 600;
 
 interface RouteParams {
   params: Promise<{ projectId: string }>;
