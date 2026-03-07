@@ -4,36 +4,6 @@ import { Content, BuilderProject, BuilderComponent } from '@/models';
 import * as babel from '@babel/core';
 import mongoose from 'mongoose';
 
-// Remove blocks that start with a regex match and end with a balanced closing brace
-function removeBalancedBlocks(code: string, pattern: RegExp): string {
-  let result = code;
-  let match;
-  // Reset regex state
-  pattern.lastIndex = 0;
-  while ((match = pattern.exec(result)) !== null) {
-    const start = match.index;
-    // Find the opening brace position
-    const braceStart = result.indexOf('{', start + match[0].length - 1);
-    if (braceStart === -1) break;
-    // Walk forward counting braces to find the balanced closing brace
-    let depth = 1;
-    let pos = braceStart + 1;
-    while (pos < result.length && depth > 0) {
-      if (result[pos] === '{') depth++;
-      else if (result[pos] === '}') depth--;
-      pos++;
-    }
-    // Remove the entire block (including trailing whitespace)
-    const end = pos;
-    const trailing = result.slice(end).match(/^\s*/);
-    const trailingLen = trailing ? trailing[0].length : 0;
-    result = result.slice(0, start) + result.slice(end + trailingLen);
-    // Reset regex to search from the removal point
-    pattern.lastIndex = start;
-  }
-  return result;
-}
-
 // POST - Generate preview HTML for a page
 export async function POST(req: NextRequest) {
   try {
@@ -47,15 +17,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Pre-process code to fix common AI mistakes before Babel
+    // Pre-process: only fix patterns that Babel's preset-typescript can't handle.
+    // Keep it minimal to avoid corrupting string content.
     let preprocessedCode = code
       // Fix malformed type annotations like "any BlogPost[]" -> "any[]"
       .replace(/:\s*any\s+\w+\[\]/g, ': any[]');
-
-    // Remove TypeScript interface declarations (handles nested braces)
-    preprocessedCode = removeBalancedBlocks(preprocessedCode, /interface\s+\w+\s*\{/g);
-    // Remove TypeScript type declarations
-    preprocessedCode = preprocessedCode.replace(/type\s+\w+\s*=[\s\S]*?;\s*/g, '');
 
     // Transpile TSX to JavaScript
     let transpiledCode: string;
@@ -152,6 +118,8 @@ export async function POST(req: NextRequest) {
     // Fetch and transpile Header/Footer components for page preview
     let headerJs = '';
     let footerJs = '';
+    let headerRawCode = '';
+    let footerRawCode = '';
     if (includeLayout && projectId && mongoose.Types.ObjectId.isValid(projectId)) {
       try {
         await connectDB();
@@ -172,8 +140,6 @@ export async function POST(req: NextRequest) {
           try {
             let preprocessed = code
               .replace(/:\s*any\s+\w+\[\]/g, ': any[]');
-            preprocessed = removeBalancedBlocks(preprocessed, /interface\s+\w+\s*\{/g);
-            preprocessed = preprocessed.replace(/type\s+\w+\s*=[\s\S]*?;\s*/g, '');
 
             const result = babel.transformSync(preprocessed, {
               presets: [
@@ -197,18 +163,34 @@ export async function POST(req: NextRequest) {
         };
 
         if (headerComp?.code) {
-          headerJs = transpileComponent(headerComp.code as string, 'Header');
+          headerRawCode = headerComp.code as string;
+          headerJs = transpileComponent(headerRawCode, 'Header');
         }
         if (footerComp?.code) {
-          footerJs = transpileComponent(footerComp.code as string, 'Footer');
+          footerRawCode = footerComp.code as string;
+          footerJs = transpileComponent(footerRawCode, 'Footer');
         }
       } catch (layoutError) {
         console.error('Failed to load layout components for preview:', layoutError);
       }
     }
 
+    // Extract icon names from lucide-react imports in all raw source code (before transpilation strips imports)
+    const allRawCode = [code, headerRawCode, footerRawCode].join('\n');
+    const lucideImportRegex = /import\s+\{([^}]+)\}\s+from\s+['"]lucide-react['"]/g;
+    const extractedIcons = new Set<string>();
+    let lucideMatch;
+    while ((lucideMatch = lucideImportRegex.exec(allRawCode)) !== null) {
+      lucideMatch[1].split(',').forEach((name: string) => {
+        const trimmed = name.trim();
+        if (trimmed && /^[A-Z]/.test(trimmed)) {
+          extractedIcons.add(trimmed);
+        }
+      });
+    }
+
     // Generate preview HTML
-    const previewHtml = generatePreviewHTML(transpiledCode, blogData, singleBlog, projectSettings, language, direction, headerJs, footerJs);
+    const previewHtml = generatePreviewHTML(transpiledCode, blogData, singleBlog, projectSettings, language, direction, headerJs, footerJs, extractedIcons);
 
     return NextResponse.json({
       success: true,
@@ -252,7 +234,8 @@ function generatePreviewHTML(
   language?: string,
   direction?: string,
   headerJs?: string,
-  footerJs?: string
+  footerJs?: string,
+  extractedIcons?: Set<string>
 ): string {
   // Remove import statements as they won't work in browser
   const cleanedCode = jsCode
@@ -435,30 +418,10 @@ function generatePreviewHTML(
       }, React.createElement('circle', { cx: 12, cy: 12, r: 10 }));
     };
 
-    // Common Lucide icons
-    const Menu = createIcon('Menu');
-    const X = createIcon('X');
-    const ChevronDown = createIcon('ChevronDown');
-    const ChevronRight = createIcon('ChevronRight');
-    const ArrowRight = createIcon('ArrowRight');
-    const Mail = createIcon('Mail');
-    const Phone = createIcon('Phone');
-    const MapPin = createIcon('MapPin');
-    const Clock = createIcon('Clock');
-    const Calendar = createIcon('Calendar');
-    const User = createIcon('User');
-    const Search = createIcon('Search');
-    const Facebook = createIcon('Facebook');
-    const Twitter = createIcon('Twitter');
-    const Instagram = createIcon('Instagram');
-    const Linkedin = createIcon('Linkedin');
-    const Github = createIcon('Github');
-    const Youtube = createIcon('Youtube');
-    const Star = createIcon('Star');
-    const Heart = createIcon('Heart');
-    const Check = createIcon('Check');
-    const Plus = createIcon('Plus');
-    const Minus = createIcon('Minus');
+    // Register icon mocks extracted from lucide-react imports (server-side parsed)
+    ${JSON.stringify([...(extractedIcons || [])])}.forEach(function(name) {
+      if (!window[name]) window[name] = createIcon(name);
+    });
 
     // Blog data - for blog-listing pages (array of blogs)
     const blogs = ${JSON.stringify(blogData)};
@@ -468,28 +431,47 @@ function generatePreviewHTML(
     // Placeholder for useState hook (for client components)
     const { useState, useEffect, useCallback, useMemo, useRef } = React;
 
+    // React Error Boundary for graceful component failure
+    class ErrorBoundary extends React.Component {
+      constructor(props) {
+        super(props);
+        this.state = { hasError: false, error: null };
+      }
+      static getDerivedStateFromError(error) {
+        return { hasError: true, error };
+      }
+      render() {
+        if (this.state.hasError) {
+          return React.createElement('div', {
+            style: { padding: '16px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', margin: '8px', color: '#991b1b', fontFamily: 'monospace', fontSize: '13px' }
+          },
+            React.createElement('strong', null, 'Component Error: '),
+            this.state.error?.message || 'Unknown error'
+          );
+        }
+        return this.props.children;
+      }
+    }
+
     try {
-      // Layout components (Header/Footer)
-      ${headerJs || '// No header component'}
-      ${footerJs || '// No footer component'}
+      // Layout components (wrapped in IIFE to avoid variable name collisions)
+      ${headerJs ? `var Header = (function() { ${headerJs}; return typeof Header !== 'undefined' ? Header : null; })();` : '// No header component'}
+      ${footerJs ? `var Footer = (function() { ${footerJs}; return typeof Footer !== 'undefined' ? Footer : null; })();` : '// No footer component'}
 
-      // Page component
-      ${cleanedCode}
+      // Page component (wrapped in IIFE to isolate scope)
+      var Page = (function() { ${cleanedCode}; return typeof Page !== 'undefined' ? Page : null; })();
 
-      // Render with layout wrapping (Header + Page + Footer)
+      // Render with layout wrapping (Header + Page + Footer) — each wrapped in ErrorBoundary
       const root = ReactDOM.createRoot(document.getElementById('root'));
-      const pageElement = React.createElement(
-        typeof Page !== 'undefined' ? Page : (() => React.createElement('div', { className: 'p-4' }, 'No component found')),
-        { blogs: blogs, blog: blog }
-      );
+      const _PageComp = Page || (() => React.createElement('div', { className: 'p-4' }, 'No component found'));
+      const pageElement = React.createElement(ErrorBoundary, null, React.createElement(_PageComp, { blogs: blogs, blog: blog }));
       const _siteName = '${settings.siteName.replace(/'/g, "\\'")}';
-      const _hasLayout = typeof Header !== 'undefined' || typeof Footer !== 'undefined';
-      if (_hasLayout) {
+      if (Header || Footer) {
         root.render(
           React.createElement('div', null,
-            typeof Header !== 'undefined' ? React.createElement(Header, { siteName: _siteName }) : null,
+            Header ? React.createElement(ErrorBoundary, null, React.createElement(Header, { siteName: _siteName })) : null,
             pageElement,
-            typeof Footer !== 'undefined' ? React.createElement(Footer, { siteName: _siteName }) : null
+            Footer ? React.createElement(ErrorBoundary, null, React.createElement(Footer, { siteName: _siteName })) : null
           )
         );
       } else {

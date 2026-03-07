@@ -25,6 +25,7 @@ import {
   Palette,
   PenTool,
   Wand2,
+  BookOpen,
 } from 'lucide-react';
 
 const navigation = [
@@ -107,6 +108,12 @@ const navigation = [
     name: 'Templates',
     href: '/admin/templates',
     icon: Layout,
+  },
+  {
+    name: 'AI Blog Writer',
+    href: '/admin/ai-blog-writer',
+    icon: BookOpen,
+    badge: 'AI',
   },
   {
     name: 'Create Post',

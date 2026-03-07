@@ -155,7 +155,6 @@ const ContentSchema = new Schema<IContent>(
     categoryId: {
       type: Schema.Types.ObjectId,
       ref: 'Category',
-      required: true,
       index: true,
     },
     tags: [{ type: String, trim: true }],

@@ -59,16 +59,32 @@ export async function PUT(
       );
     }
 
-    // Prepare update data
-    const updateData = {
-      ...body,
-      updatedAt: new Date(),
-    };
+    // Whitelist allowed update fields
+    const allowedFields = [
+      'title', 'slug', 'excerpt', 'body', 'type', 'status', 'featuredImage',
+      'metaTitle', 'metaDescription', 'focusKeyword', 'secondaryKeywords',
+      'tags', 'categoryId', 'authorName', 'authorBio', 'authorAvatar',
+      'scheduledAt', 'publishedAt', 'isAiGenerated', 'internalLinks', 'outboundLinks',
+    ];
+    const updateData: Record<string, unknown> = { updatedAt: new Date() };
+    for (const field of allowedFields) {
+      if (body[field] !== undefined) {
+        updateData[field] = body[field];
+      }
+    }
+
+    // Set publishedAt when publishing for the first time
+    if (body.status === 'published' && !currentContent.publishedAt && !body.publishedAt) {
+      updateData.publishedAt = new Date();
+    }
 
     // Update word count and reading time if content changed
-    if (body.content) {
-      updateData.wordCount = body.content.split(/\s+/).length;
-      updateData.readingTime = Math.ceil(updateData.wordCount / 200);
+    const contentText = body.body || body.content;
+    if (contentText) {
+      // Strip HTML tags for accurate word count
+      const plainText = contentText.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+      updateData.wordCount = plainText.split(/\s+/).length;
+      updateData.readingTime = Math.ceil((updateData.wordCount as number) / 200);
     }
 
     // Handle keyword assignment changes

@@ -103,7 +103,7 @@ export async function POST(req: NextRequest) {
     await connectDB();
 
     const body = await req.json();
-    const { websiteId, title, slug, type = 'blog', status = 'draft' } = body;
+    const { websiteId, title, slug, type = 'blog_post', status = 'draft' } = body;
 
     if (!websiteId || !title) {
       return NextResponse.json(
@@ -142,6 +142,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Strip HTML for accurate word count
+    const rawBody = body.content || body.body || '';
+    const plainText = rawBody.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+    const wordCount = plainText ? plainText.split(/\s+/).length : 0;
+
     const content = await Content.create({
       websiteId: new mongoose.Types.ObjectId(websiteId),
       title,
@@ -149,21 +154,24 @@ export async function POST(req: NextRequest) {
       type,
       status,
       excerpt: body.excerpt,
-      body: body.content || body.body || '',
+      body: rawBody,
       featuredImage: body.featuredImage,
-      metaTitle: body.seo?.metaTitle,
-      metaDescription: body.seo?.metaDescription,
+      metaTitle: body.metaTitle || body.seo?.metaTitle,
+      metaDescription: body.metaDescription || body.seo?.metaDescription,
       authorName: body.author || 'Admin',
       keywordId: body.keywordId
         ? new mongoose.Types.ObjectId(body.keywordId)
         : undefined,
+      focusKeyword: body.focusKeyword,
       secondaryKeywords: body.secondaryKeywords || [],
+      publishedAt: body.publishedAt ? new Date(body.publishedAt) : (status === 'published' ? new Date() : undefined),
       internalLinks: body.internalLinks || [],
       outboundLinks: body.externalLinks || [],
       categoryId: body.categoryId ? new mongoose.Types.ObjectId(body.categoryId) : undefined,
       tags: body.tags || [],
-      wordCount: (body.content || body.body || '').split(/\s+/).length || 0,
-      readingTime: Math.ceil(((body.content || body.body || '').split(/\s+/).length || 0) / 200),
+      isAiGenerated: body.isAiGenerated || false,
+      wordCount,
+      readingTime: Math.ceil(wordCount / 200),
     });
 
     // Update keyword status if assigned

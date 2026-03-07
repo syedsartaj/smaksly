@@ -10,14 +10,16 @@ import {
   createCodeEditPrompt,
   createQuickEditPrompt,
   createImprovementAnalysisPrompt,
+  IMPROVEMENT_SUGGESTIONS_PROMPT,
 } from './prompts/code-editing';
 import {
   processGeneratedCode,
   extractCodeFromResponse,
   SanitizationResult,
 } from './code-sanitizer';
+import { getAnthropic, CLAUDE_MODEL, MAX_TOKENS } from './claude-client';
 
-// Lazy-load OpenAI client to avoid build-time errors
+// Lazy-load OpenAI client to avoid build-time errors (kept as fallback)
 let openaiClient: OpenAI | null = null;
 
 function getOpenAI(): OpenAI {
@@ -27,6 +29,39 @@ function getOpenAI(): OpenAI {
     });
   }
   return openaiClient;
+}
+
+// Check if Claude is available
+function usesClaude(): boolean {
+  return !!process.env.ANTHROPIC_API_KEY;
+}
+
+// Helper to call Claude
+async function callClaude(system: string, userMessage: string, maxTokens = MAX_TOKENS): Promise<string> {
+  const client = getAnthropic();
+  const response = await client.messages.create({
+    model: CLAUDE_MODEL,
+    max_tokens: maxTokens,
+    system,
+    messages: [{ role: 'user', content: userMessage }],
+  });
+  return response.content[0].type === 'text' ? response.content[0].text : '';
+}
+
+// Helper to call Claude with conversation
+async function callClaudeConversation(
+  system: string,
+  messages: Array<{ role: 'user' | 'assistant'; content: string }>,
+  maxTokens = MAX_TOKENS
+): Promise<string> {
+  const client = getAnthropic();
+  const response = await client.messages.create({
+    model: CLAUDE_MODEL,
+    max_tokens: maxTokens,
+    system,
+    messages,
+  });
+  return response.content[0].type === 'text' ? response.content[0].text : '';
 }
 
 export interface ProjectSettings {
@@ -151,17 +186,22 @@ When using these images, use the Image component with the exact URL provided. Fo
         userPrompt = userPrompt + mediaContext;
       }
 
-      const completion = await getOpenAI().chat.completions.create({
-        model: this.model,
-        messages: [
-          { role: 'system', content: PAGE_GENERATION_SYSTEM_PROMPT },
-          { role: 'user', content: userPrompt },
-        ],
-        temperature: 0.7,
-        max_tokens: this.maxTokens,
-      });
+      let rawResponse: string;
 
-      const rawResponse = completion.choices[0]?.message?.content || '';
+      if (usesClaude()) {
+        rawResponse = await callClaude(PAGE_GENERATION_SYSTEM_PROMPT, userPrompt);
+      } else {
+        const completion = await getOpenAI().chat.completions.create({
+          model: this.model,
+          messages: [
+            { role: 'system', content: PAGE_GENERATION_SYSTEM_PROMPT },
+            { role: 'user', content: userPrompt },
+          ],
+          temperature: 0.7,
+          max_tokens: this.maxTokens,
+        });
+        rawResponse = completion.choices[0]?.message?.content || '';
+      }
 
       // Process and sanitize the generated code
       const sanitizationResult = processGeneratedCode(rawResponse);
@@ -205,17 +245,22 @@ When using these images, use the Image component with the exact URL provided. Fo
         });
       }
 
-      const completion = await getOpenAI().chat.completions.create({
-        model: this.model,
-        messages: [
-          { role: 'system', content: CODE_EDIT_SYSTEM_PROMPT },
-          { role: 'user', content: userPrompt },
-        ],
-        temperature: 0.5, // Lower temperature for more precise edits
-        max_tokens: this.maxTokens,
-      });
+      let rawResponse: string;
 
-      const rawResponse = completion.choices[0]?.message?.content || '';
+      if (usesClaude()) {
+        rawResponse = await callClaude(CODE_EDIT_SYSTEM_PROMPT, userPrompt);
+      } else {
+        const completion = await getOpenAI().chat.completions.create({
+          model: this.model,
+          messages: [
+            { role: 'system', content: CODE_EDIT_SYSTEM_PROMPT },
+            { role: 'user', content: userPrompt },
+          ],
+          temperature: 0.5,
+          max_tokens: this.maxTokens,
+        });
+        rawResponse = completion.choices[0]?.message?.content || '';
+      }
 
       // Process and sanitize the edited code
       const sanitizationResult = processGeneratedCode(rawResponse);
@@ -247,17 +292,23 @@ When using these images, use the Image component with the exact URL provided. Fo
         pages,
       });
 
-      const completion = await getOpenAI().chat.completions.create({
-        model: this.model,
-        messages: [
-          { role: 'system', content: PAGE_GENERATION_SYSTEM_PROMPT },
-          { role: 'user', content: userPrompt },
-        ],
-        temperature: 0.7,
-        max_tokens: this.maxTokens,
-      });
+      let rawResponse: string;
 
-      const rawResponse = completion.choices[0]?.message?.content || '';
+      if (usesClaude()) {
+        rawResponse = await callClaude(PAGE_GENERATION_SYSTEM_PROMPT, userPrompt);
+      } else {
+        const completion = await getOpenAI().chat.completions.create({
+          model: this.model,
+          messages: [
+            { role: 'system', content: PAGE_GENERATION_SYSTEM_PROMPT },
+            { role: 'user', content: userPrompt },
+          ],
+          temperature: 0.7,
+          max_tokens: this.maxTokens,
+        });
+        rawResponse = completion.choices[0]?.message?.content || '';
+      }
+
       const sanitizationResult = processGeneratedCode(rawResponse);
 
       return {
@@ -362,14 +413,26 @@ When using these images, use the Image component with the exact URL provided. Fo
         content: newInstruction,
       });
 
-      const completion = await getOpenAI().chat.completions.create({
-        model: this.model,
-        messages,
-        temperature: 0.5,
-        max_tokens: this.maxTokens,
-      });
+      let rawResponse: string;
 
-      const rawResponse = completion.choices[0]?.message?.content || '';
+      if (usesClaude()) {
+        // For Claude, system prompt is separate
+        const claudeMessages = messages
+          .filter((m) => m.role !== 'system')
+          .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }));
+        rawResponse = await callClaudeConversation(
+          CONVERSATIONAL_EDIT_SYSTEM_PROMPT,
+          claudeMessages
+        );
+      } else {
+        const completion = await getOpenAI().chat.completions.create({
+          model: this.model,
+          messages,
+          temperature: 0.5,
+          max_tokens: this.maxTokens,
+        });
+        rawResponse = completion.choices[0]?.message?.content || '';
+      }
 
       // Check if response contains code
       if (rawResponse.includes('```') || rawResponse.includes('import ') || rawResponse.includes('export ')) {

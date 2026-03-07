@@ -13,6 +13,7 @@ import {
   ChevronLeft,
   AlertCircle,
   Image as ImageIcon,
+  Rocket,
 } from 'lucide-react';
 import Link from 'next/link';
 // react-resizable-panels removed in favor of flex layout for editor/preview/AI panels
@@ -25,6 +26,7 @@ import { AIPromptModal } from './components/AIPromptModal';
 import { AIEditPanel } from './components/AIEditPanel';
 import { PublishModal } from './components/PublishModal';
 import { SettingsModal } from './components/SettingsModal';
+import { GenerateSiteModal } from './components/GenerateSiteModal';
 
 export default function BuilderWorkspace() {
   const params = useParams();
@@ -72,6 +74,7 @@ export default function BuilderWorkspace() {
   const [showAIPromptModal, setShowAIPromptModal] = useState(false);
   const [showPublishModal, setShowPublishModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showGenerateSite, setShowGenerateSite] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -218,14 +221,23 @@ export default function BuilderWorkspace() {
             <span className="text-red-400 text-sm mr-2">{saveError}</span>
           )}
 
-          {/* AI Generate Button */}
+          {/* Generate Entire Site Button */}
+          <button
+            onClick={() => setShowGenerateSite(true)}
+            className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white text-sm rounded-lg transition-colors"
+          >
+            <Rocket className="h-4 w-4" />
+            Build Site
+          </button>
+
+          {/* AI Generate Single Page Button */}
           <button
             onClick={() => setShowAIPromptModal(true)}
             disabled={(!currentPage && !currentComponent) || isGenerating}
             className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white text-sm rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Sparkles className="h-4 w-4" />
-            Generate with AI
+            Generate Page
           </button>
 
           {/* AI Edit Button */}
@@ -342,6 +354,10 @@ export default function BuilderWorkspace() {
 
       {showSettingsModal && (
         <SettingsModal onClose={() => setShowSettingsModal(false)} />
+      )}
+
+      {showGenerateSite && (
+        <GenerateSiteModal onClose={() => setShowGenerateSite(false)} />
       )}
     </div>
   );

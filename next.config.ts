@@ -22,6 +22,9 @@ const nextConfig: NextConfig = {
     ],
   },
 
+  // Externalize Babel packages so they resolve correctly in API routes
+  serverExternalPackages: ['@babel/core', '@babel/preset-react', '@babel/preset-typescript'],
+
   // Disable x-powered-by header for security
   poweredByHeader: false,
 
