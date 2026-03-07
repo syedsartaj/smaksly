@@ -172,7 +172,6 @@ Generate a comprehensive, engaging, SEO-optimized blog post. Return ONLY the JSO
         status: 'draft',
         excerpt: parsed.excerpt,
         body: parsed.body,
-        featuredImage: '',
         metaTitle: parsed.metaTitle,
         metaDescription: parsed.metaDescription,
         focusKeyword: parsed.focusKeyword,

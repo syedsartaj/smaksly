@@ -100,7 +100,7 @@ export async function GET(req: NextRequest) {
         .sort({ publishedAt: -1 })
         .skip(skip)
         .limit(limit)
-        .select('title slug excerpt featuredImage publishedAt authorName readingTime tags categoryId')
+        .select('title slug excerpt featuredImage publishedAt authorName readingTime tags categoryId metaTitle metaDescription')
         .populate('categoryId', 'name slug')
         .lean(),
       Content.countDocuments(query),
@@ -134,6 +134,8 @@ export async function GET(req: NextRequest) {
       readingTime: blog.readingTime || 5,
       tags: blog.tags || [],
       category: blog.categoryId,
+      metaTitle: blog.metaTitle || blog.title,
+      metaDescription: blog.metaDescription || blog.excerpt || '',
     }));
 
     return NextResponse.json({

@@ -64,7 +64,7 @@ export async function PUT(
       'title', 'slug', 'excerpt', 'body', 'type', 'status', 'featuredImage',
       'metaTitle', 'metaDescription', 'focusKeyword', 'secondaryKeywords',
       'tags', 'categoryId', 'authorName', 'authorBio', 'authorAvatar',
-      'scheduledAt', 'publishedAt', 'isAiGenerated', 'internalLinks', 'outboundLinks',
+      'scheduledAt', 'publishedAt', 'isAiGenerated', 'internalLinks', 'outboundLinks', 'keywordId',
     ];
     const updateData: Record<string, unknown> = { updatedAt: new Date() };
     for (const field of allowedFields) {
