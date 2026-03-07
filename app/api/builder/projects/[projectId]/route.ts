@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/db';
-import { BuilderProject, BuilderPage, BuilderComponent, BuilderAsset } from '@/models';
+import { BuilderProject, BuilderPage, BuilderComponent, BuilderAsset, Content } from '@/models';
 import mongoose from 'mongoose';
 
 interface RouteParams {
@@ -141,7 +141,7 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
   }
 }
 
-// DELETE - Delete a project and all its pages, components, and assets
+// DELETE - Delete a project and all its pages, components, assets, blogs, Vercel project, and GitHub repo
 export async function DELETE(req: NextRequest, { params }: RouteParams) {
   try {
     await connectDB();
@@ -164,19 +164,77 @@ export async function DELETE(req: NextRequest, { params }: RouteParams) {
       );
     }
 
-    // Delete all related data
-    const projectObjectId = new mongoose.Types.ObjectId(projectId);
+    const VERCEL_TOKEN = process.env.VERCEL_TOKEN;
+    const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
+    const GITHUB_USERNAME = process.env.GITHUB_USERNAME;
+    const cleanup: string[] = [];
 
+    // 1. Delete Vercel project
+    if (project.vercelProjectId && VERCEL_TOKEN) {
+      try {
+        const res = await fetch(
+          `https://api.vercel.com/v9/projects/${project.vercelProjectId}`,
+          { method: 'DELETE', headers: { Authorization: `Bearer ${VERCEL_TOKEN}` } }
+        );
+        if (res.ok || res.status === 404) {
+          cleanup.push('Vercel project deleted');
+        } else {
+          console.error('Failed to delete Vercel project:', await res.text());
+          cleanup.push('Vercel project deletion failed');
+        }
+      } catch (e) {
+        console.error('Vercel delete error:', e);
+        cleanup.push('Vercel project deletion error');
+      }
+    }
+
+    // 2. Delete GitHub repository
+    if (project.gitRepoName && GITHUB_TOKEN && GITHUB_USERNAME) {
+      try {
+        const res = await fetch(
+          `https://api.github.com/repos/${GITHUB_USERNAME}/${project.gitRepoName}`,
+          {
+            method: 'DELETE',
+            headers: {
+              Authorization: `token ${GITHUB_TOKEN}`,
+              Accept: 'application/vnd.github.v3+json',
+            },
+          }
+        );
+        if (res.ok || res.status === 404) {
+          cleanup.push('GitHub repo deleted');
+        } else {
+          console.error('Failed to delete GitHub repo:', await res.text());
+          cleanup.push('GitHub repo deletion failed');
+        }
+      } catch (e) {
+        console.error('GitHub delete error:', e);
+        cleanup.push('GitHub repo deletion error');
+      }
+    }
+
+    // 3. Delete all blog content for this website
+    const projectObjectId = new mongoose.Types.ObjectId(projectId);
+    let blogsDeleted = 0;
+    if (project.websiteId) {
+      const result = await Content.deleteMany({ websiteId: project.websiteId });
+      blogsDeleted = result.deletedCount || 0;
+      cleanup.push(`${blogsDeleted} blog(s) deleted`);
+    }
+
+    // 4. Delete all builder data
     await Promise.all([
       BuilderPage.deleteMany({ projectId: projectObjectId }),
       BuilderComponent.deleteMany({ projectId: projectObjectId }),
       BuilderAsset.deleteMany({ projectId: projectObjectId }),
       BuilderProject.findByIdAndDelete(projectId),
     ]);
+    cleanup.push('Project data deleted');
 
     return NextResponse.json({
       success: true,
-      message: 'Project and all related data deleted successfully',
+      message: 'Project fully deleted',
+      cleanup,
     });
   } catch (error) {
     console.error('Error deleting builder project:', error);

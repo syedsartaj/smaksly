@@ -11,9 +11,22 @@ import {
   Globe,
   RefreshCw,
   Search,
+  Settings,
+  X,
+  Link,
+  AlertTriangle,
+  CheckCircle,
+  Loader2,
 } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { useBuilderStore, BuilderProject } from '@/stores/useBuilderStore';
+
+interface VercelDomain {
+  name: string;
+  verified: boolean;
+  verification?: { type: string; domain: string; value: string }[];
+  configuredBy?: string;
+}
 
 export default function BuilderProjectsPage() {
   const router = useRouter();
@@ -27,6 +40,18 @@ export default function BuilderProjectsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
+  const [deleteModal, setDeleteModal] = useState<BuilderProject | null>(null);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [deleteProgress, setDeleteProgress] = useState<string[]>([]);
+
+  // Domain modal state
+  const [domainModal, setDomainModal] = useState<BuilderProject | null>(null);
+  const [domains, setDomains] = useState<VercelDomain[]>([]);
+  const [isLoadingDomains, setIsLoadingDomains] = useState(false);
+  const [newDomain, setNewDomain] = useState('');
+  const [isAddingDomain, setIsAddingDomain] = useState(false);
+  const [domainError, setDomainError] = useState('');
+  const [removingDomain, setRemovingDomain] = useState<string | null>(null);
 
   const fetchProjects = useCallback(async () => {
     try {
@@ -48,27 +73,115 @@ export default function BuilderProjectsPage() {
     fetchProjects();
   }, [fetchProjects]);
 
-  const handleDelete = async (projectId: string) => {
-    if (!confirm('Are you sure you want to delete this project? This action cannot be undone.')) {
-      return;
+  // Domain management
+  const fetchDomains = async (project: BuilderProject) => {
+    setIsLoadingDomains(true);
+    setDomainError('');
+    try {
+      const res = await fetch(`/api/builder/projects/${project._id}/domain`);
+      const data = await res.json();
+      if (data.success) {
+        setDomains(data.data.domains || []);
+      } else {
+        setDomainError(data.error || 'Failed to fetch domains');
+      }
+    } catch {
+      setDomainError('Failed to fetch domains');
+    } finally {
+      setIsLoadingDomains(false);
     }
+  };
+
+  const openDomainModal = (project: BuilderProject) => {
+    setDomainModal(project);
+    setNewDomain('');
+    setDomainError('');
+    setDomains([]);
+    fetchDomains(project);
+  };
+
+  const handleAddDomain = async () => {
+    if (!domainModal || !newDomain.trim()) return;
+    setIsAddingDomain(true);
+    setDomainError('');
+    try {
+      const res = await fetch(`/api/builder/projects/${domainModal._id}/domain`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ domain: newDomain.trim() }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setNewDomain('');
+        fetchDomains(domainModal);
+        fetchProjects();
+      } else {
+        setDomainError(data.error || 'Failed to add domain');
+      }
+    } catch {
+      setDomainError('Failed to add domain');
+    } finally {
+      setIsAddingDomain(false);
+    }
+  };
+
+  const handleRemoveDomain = async (domain: string) => {
+    if (!domainModal) return;
+    if (!confirm(`Remove domain "${domain}"? This will disconnect it from your site.`)) return;
+    setRemovingDomain(domain);
+    try {
+      const res = await fetch(`/api/builder/projects/${domainModal._id}/domain`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ domain }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        fetchDomains(domainModal);
+        fetchProjects();
+      } else {
+        setDomainError(data.error || 'Failed to remove domain');
+      }
+    } catch {
+      setDomainError('Failed to remove domain');
+    } finally {
+      setRemovingDomain(null);
+    }
+  };
+
+  // Delete with full cleanup
+  const handleDelete = async (project: BuilderProject) => {
+    setDeleteModal(project);
+    setDeleteConfirmText('');
+    setDeleteProgress([]);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteModal || deleteConfirmText !== deleteModal.name) return;
 
     try {
-      setIsDeleting(projectId);
-      const response = await fetch(`/api/builder/projects/${projectId}`, {
+      setIsDeleting(deleteModal._id);
+      setDeleteProgress(['Starting deletion...']);
+
+      const response = await fetch(`/api/builder/projects/${deleteModal._id}`, {
         method: 'DELETE',
       });
 
       const data = await response.json();
 
       if (data.success) {
-        setProjects(projects.filter((p) => p._id !== projectId));
+        setDeleteProgress(data.cleanup || ['Project deleted']);
+        setProjects(projects.filter((p) => p._id !== deleteModal._id));
+        setTimeout(() => {
+          setDeleteModal(null);
+          setDeleteProgress([]);
+        }, 2000);
       } else {
-        alert(data.error || 'Failed to delete project');
+        setDeleteProgress((prev) => [...prev, `Error: ${data.error}`]);
       }
     } catch (error) {
       console.error('Error deleting project:', error);
-      alert('Failed to delete project');
+      setDeleteProgress((prev) => [...prev, 'Unexpected error during deletion']);
     } finally {
       setIsDeleting(null);
     }
@@ -186,8 +299,14 @@ export default function BuilderProjectsPage() {
               className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden hover:border-zinc-700 transition-colors"
             >
               {/* Project Preview/Header */}
-              <div className="h-32 bg-gradient-to-br from-emerald-500/20 to-cyan-500/20 flex items-center justify-center">
+              <div className="h-32 bg-gradient-to-br from-emerald-500/20 to-cyan-500/20 flex items-center justify-center relative">
                 <Globe className="h-12 w-12 text-emerald-400/50" />
+                {project.status === 'published' && project.deploymentUrl && (
+                  <div className="absolute top-2 right-2 flex items-center gap-1 px-2 py-1 bg-emerald-600/80 rounded-full text-[10px] text-white">
+                    <div className="w-1.5 h-1.5 bg-emerald-300 rounded-full animate-pulse" />
+                    Live
+                  </div>
+                )}
               </div>
 
               {/* Project Info */}
@@ -200,8 +319,14 @@ export default function BuilderProjectsPage() {
                 </div>
 
                 {project.website && (
-                  <p className="text-sm text-zinc-400 mb-3 truncate">
+                  <p className="text-sm text-zinc-400 mb-1 truncate">
                     {project.website.domain}
+                  </p>
+                )}
+
+                {project.deploymentUrl && (
+                  <p className="text-xs text-emerald-400/70 mb-2 truncate">
+                    {project.deploymentUrl}
                   </p>
                 )}
 
@@ -220,6 +345,16 @@ export default function BuilderProjectsPage() {
                     Open
                   </button>
 
+                  {project.status === 'published' && project.vercelProjectId && (
+                    <button
+                      onClick={() => openDomainModal(project)}
+                      className="p-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white rounded-lg transition-colors"
+                      title="Domain Settings"
+                    >
+                      <Settings className="h-4 w-4" />
+                    </button>
+                  )}
+
                   {project.deploymentUrl && (
                     <a
                       href={project.deploymentUrl}
@@ -233,7 +368,7 @@ export default function BuilderProjectsPage() {
                   )}
 
                   <button
-                    onClick={() => handleDelete(project._id)}
+                    onClick={() => handleDelete(project)}
                     disabled={isDeleting === project._id}
                     className="p-2 bg-zinc-800 hover:bg-red-600/20 text-zinc-400 hover:text-red-400 rounded-lg transition-colors disabled:opacity-50"
                     title="Delete Project"
@@ -248,6 +383,214 @@ export default function BuilderProjectsPage() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-zinc-900 border border-zinc-700 rounded-xl max-w-md w-full p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 bg-red-500/10 rounded-lg">
+                <AlertTriangle className="h-6 w-6 text-red-400" />
+              </div>
+              <h3 className="text-lg font-semibold text-white">Delete Project</h3>
+            </div>
+
+            {deleteProgress.length > 0 ? (
+              <div className="space-y-2 mb-4">
+                {deleteProgress.map((msg, i) => (
+                  <div key={i} className="flex items-center gap-2 text-sm">
+                    <CheckCircle className="h-4 w-4 text-emerald-400 flex-shrink-0" />
+                    <span className="text-zinc-300">{msg}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <>
+                <p className="text-zinc-400 text-sm mb-4">
+                  This will permanently delete <strong className="text-white">{deleteModal.name}</strong> and all associated data:
+                </p>
+                <ul className="text-sm text-zinc-400 space-y-1 mb-4 ml-4 list-disc">
+                  {deleteModal.vercelProjectId && <li>Vercel deployment</li>}
+                  {deleteModal.gitRepoName && <li>GitHub repository ({deleteModal.gitRepoName})</li>}
+                  <li>All blog posts and content</li>
+                  <li>All pages, components, and assets</li>
+                </ul>
+                <p className="text-sm text-zinc-400 mb-3">
+                  Type <strong className="text-red-400">{deleteModal.name}</strong> to confirm:
+                </p>
+                <input
+                  type="text"
+                  value={deleteConfirmText}
+                  onChange={(e) => setDeleteConfirmText(e.target.value)}
+                  placeholder={deleteModal.name}
+                  className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-white placeholder-zinc-600 focus:outline-none focus:border-red-500 mb-4"
+                  autoFocus
+                />
+              </>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeleteModal(null)}
+                className="flex-1 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg transition-colors"
+              >
+                {deleteProgress.length > 0 ? 'Close' : 'Cancel'}
+              </button>
+              {deleteProgress.length === 0 && (
+                <button
+                  onClick={confirmDelete}
+                  disabled={deleteConfirmText !== deleteModal.name || isDeleting === deleteModal._id}
+                  className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {isDeleting === deleteModal._id ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Deleting...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="h-4 w-4" />
+                      Delete Everything
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Domain Settings Modal */}
+      {domainModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-zinc-900 border border-zinc-700 rounded-xl max-w-lg w-full p-6">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-emerald-500/10 rounded-lg">
+                  <Globe className="h-5 w-5 text-emerald-400" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-white">Domain Settings</h3>
+                  <p className="text-xs text-zinc-500">{domainModal.name}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setDomainModal(null)}
+                className="p-1 text-zinc-500 hover:text-white transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Add Domain */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-zinc-300 mb-2">Add Custom Domain</label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={newDomain}
+                  onChange={(e) => { setNewDomain(e.target.value); setDomainError(''); }}
+                  placeholder="example.com"
+                  className="flex-1 px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500"
+                  onKeyDown={(e) => e.key === 'Enter' && handleAddDomain()}
+                />
+                <button
+                  onClick={handleAddDomain}
+                  disabled={isAddingDomain || !newDomain.trim()}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
+                >
+                  {isAddingDomain ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                  Add
+                </button>
+              </div>
+              {domainError && (
+                <p className="text-red-400 text-xs mt-2">{domainError}</p>
+              )}
+            </div>
+
+            {/* Domain List */}
+            <div>
+              <label className="block text-sm font-medium text-zinc-300 mb-2">Current Domains</label>
+              {isLoadingDomains ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-5 w-5 text-emerald-500 animate-spin" />
+                </div>
+              ) : domains.length === 0 ? (
+                <div className="text-center py-6 text-zinc-500 text-sm">
+                  No domains configured
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {domains.map((d) => (
+                    <div
+                      key={d.name}
+                      className="flex items-center justify-between px-3 py-2.5 bg-zinc-800 border border-zinc-700 rounded-lg"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Link className="h-4 w-4 text-zinc-500 flex-shrink-0" />
+                        <span className="text-sm text-white truncate">{d.name}</span>
+                        {d.verified !== false ? (
+                          <span className="flex items-center gap-1 px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400 text-[10px] rounded-full flex-shrink-0">
+                            <CheckCircle className="h-3 w-3" />
+                            Verified
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-1 px-1.5 py-0.5 bg-yellow-500/10 text-yellow-400 text-[10px] rounded-full flex-shrink-0">
+                            <AlertTriangle className="h-3 w-3" />
+                            Pending
+                          </span>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => handleRemoveDomain(d.name)}
+                        disabled={removingDomain === d.name}
+                        className="p-1 text-zinc-500 hover:text-red-400 transition-colors flex-shrink-0 ml-2"
+                        title="Remove domain"
+                      >
+                        {removingDomain === d.name ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <X className="h-4 w-4" />
+                        )}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* DNS Instructions */}
+            {domains.some((d) => d.verified === false && d.verification?.length) && (
+              <div className="mt-4 p-3 bg-yellow-500/5 border border-yellow-500/20 rounded-lg">
+                <p className="text-xs font-medium text-yellow-400 mb-2">DNS Configuration Required</p>
+                {domains
+                  .filter((d) => d.verified === false && d.verification?.length)
+                  .map((d) => (
+                    <div key={d.name} className="text-xs text-zinc-400 space-y-1">
+                      <p className="text-zinc-300">{d.name}:</p>
+                      {d.verification?.map((v, i) => (
+                        <div key={i} className="pl-2 font-mono text-[11px]">
+                          <span className="text-zinc-500">Type:</span> {v.type} &nbsp;
+                          <span className="text-zinc-500">Name:</span> {v.domain} &nbsp;
+                          <span className="text-zinc-500">Value:</span> {v.value}
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+              </div>
+            )}
+
+            <div className="mt-6 pt-4 border-t border-zinc-800">
+              <button
+                onClick={() => setDomainModal(null)}
+                className="w-full px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg transition-colors"
+              >
+                Done
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
