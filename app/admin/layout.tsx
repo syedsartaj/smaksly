@@ -6,24 +6,14 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAuthStore } from '@/stores/useAuthStore';
 import {
   LayoutDashboard,
-  Globe,
   Search,
-  FileText,
-  Users,
-  ShoppingCart,
-  DollarSign,
-  BarChart3,
-  Settings,
-  FolderTree,
   Key,
-  Zap,
+  Settings,
   Menu,
   X,
   ChevronDown,
   LogOut,
   Layout,
-  Palette,
-  PenTool,
   Wand2,
   BookOpen,
 } from 'lucide-react';
@@ -33,17 +23,6 @@ const navigation = [
     name: 'Dashboard',
     href: '/admin/dashboard',
     icon: LayoutDashboard,
-  },
-  {
-    name: 'Websites',
-    href: '/admin/websites',
-    icon: Globe,
-    badge: '1000+',
-  },
-  {
-    name: 'Categories',
-    href: '/admin/categories',
-    icon: FolderTree,
   },
   {
     name: 'SEO Control',
@@ -63,42 +42,6 @@ const navigation = [
     icon: Key,
   },
   {
-    name: 'Content',
-    href: '/admin/content',
-    icon: FileText,
-    children: [
-      { name: 'All Content', href: '/admin/content' },
-      { name: 'Scheduled', href: '/admin/content/scheduled' },
-      { name: 'AI Generator', href: '/admin/content/generator' },
-    ],
-  },
-  {
-    name: 'Guest Posts',
-    href: '/admin/guest-posts',
-    icon: Zap,
-    children: [
-      { name: 'Submissions', href: '/admin/guest-posts' },
-      { name: 'Pending Review', href: '/admin/guest-posts/pending' },
-      { name: 'Published', href: '/admin/guest-posts/published' },
-      { name: 'Expiring Soon', href: '/admin/guest-posts/expiring' },
-    ],
-  },
-  {
-    name: 'Partners',
-    href: '/admin/partners',
-    icon: Users,
-  },
-  {
-    name: 'Orders',
-    href: '/admin/orders',
-    icon: ShoppingCart,
-  },
-  {
-    name: 'Commissions',
-    href: '/admin/commissions',
-    icon: DollarSign,
-  },
-  {
     name: 'Website Builder',
     href: '/admin/builder',
     icon: Wand2,
@@ -114,16 +57,6 @@ const navigation = [
     href: '/admin/ai-blog-writer',
     icon: BookOpen,
     badge: 'AI',
-  },
-  {
-    name: 'Create Post',
-    href: '/admin/post',
-    icon: PenTool,
-  },
-  {
-    name: 'Analytics',
-    href: '/admin/analytics',
-    icon: BarChart3,
   },
   {
     name: 'Settings',

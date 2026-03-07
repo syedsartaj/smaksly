@@ -16,6 +16,9 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [isCapsLockOn, setIsCapsLockOn] = useState(false);
 
+  // Prefetch dashboard page so redirect is instant
+  router.prefetch('/admin/dashboard');
+
   const validateEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
   const handleLogin = async () => {
@@ -40,7 +43,6 @@ export default function LoginPage() {
 
       const data = await res.json();
       if (res.ok) {
-        setMessage('success:Logged in successfully! Redirecting...');
         login(
           {
             id: data.user.id,
@@ -50,7 +52,7 @@ export default function LoginPage() {
           },
           data.user.id
         );
-        router.push('/admin/dashboard');
+        router.replace('/admin/dashboard');
       } else {
         setMessage(data.error || 'Login failed. Please try again.');
         setIsLoading(false);

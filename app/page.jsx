@@ -1,12 +1,9 @@
 'use client';
 
-import { Button } from '@/app/components/ui/button';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useState } from 'react';
 
 export default function PublicHomePage() {
-  const router = useRouter();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
@@ -31,19 +28,12 @@ export default function PublicHomePage() {
             </nav>
 
             <div className="flex items-center gap-3">
-              <Button
-                variant="ghost"
-                className="hidden sm:flex text-zinc-300 hover:text-white hover:bg-white/10"
-                onClick={() => router.push('/login')}
-              >
+              <Link href="/login" className="hidden sm:flex items-center px-4 py-2 text-zinc-300 hover:text-white hover:bg-white/10 rounded-md text-sm font-medium transition-colors">
                 Sign In
-              </Button>
-              <Button
-                className="bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-black font-semibold px-5 py-2 rounded-lg transition-all duration-200 shadow-lg shadow-emerald-500/20"
-                onClick={() => router.push('/signup')}
-              >
+              </Link>
+              <Link href="/signup" className="inline-flex items-center bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-black font-semibold px-5 py-2 rounded-lg transition-all duration-200 shadow-lg shadow-emerald-500/20 text-sm">
                 Get Started
-              </Button>
+              </Link>
 
               {/* Mobile Menu Button */}
               <button
@@ -71,12 +61,9 @@ export default function PublicHomePage() {
                 <Link href="#features" className="text-zinc-400 hover:text-white px-2 py-2">Features</Link>
                 <Link href="#services" className="text-zinc-400 hover:text-white px-2 py-2">Services</Link>
                 <Link href="#testimonials" className="text-zinc-400 hover:text-white px-2 py-2">Testimonials</Link>
-                <Button
-                  className="bg-gradient-to-r from-emerald-500 to-cyan-500 text-black font-semibold mt-2"
-                  onClick={() => router.push('/signup')}
-                >
+                <Link href="/signup" className="inline-flex items-center justify-center bg-gradient-to-r from-emerald-500 to-cyan-500 text-black font-semibold mt-2 px-4 py-2 rounded-md text-sm">
                   Get Started
-                </Button>
+                </Link>
               </div>
             </nav>
           )}
@@ -110,19 +97,12 @@ export default function PublicHomePage() {
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Button
-                className="bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-black font-semibold px-8 py-4 text-lg rounded-xl shadow-xl shadow-emerald-500/25 transition-all duration-200 hover:scale-105"
-                onClick={() => router.push('/signup')}
-              >
+              <Link href="/signup" className="inline-flex items-center justify-center bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-black font-semibold px-8 py-4 text-lg rounded-xl shadow-xl shadow-emerald-500/25 transition-all duration-200 hover:scale-105">
                 Start Free Trial
-              </Button>
-              <Button
-                variant="outline"
-                className="border-zinc-700 text-white hover:bg-white/5 px-8 py-4 text-lg rounded-xl transition-all duration-200"
-                onClick={() => router.push('/login')}
-              >
+              </Link>
+              <Link href="/login" className="inline-flex items-center justify-center border border-zinc-700 text-white hover:bg-white/5 px-8 py-4 text-lg rounded-xl transition-all duration-200">
                 Watch Demo
-              </Button>
+              </Link>
             </div>
 
             {/* Stats */}
@@ -272,19 +252,12 @@ export default function PublicHomePage() {
                   Join thousands of agencies managing their client websites with Smaksly. Start your free trial today.
                 </p>
                 <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                  <Button
-                    className="bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-black font-semibold px-8 py-4 text-lg rounded-xl shadow-xl shadow-emerald-500/25 transition-all duration-200 hover:scale-105"
-                    onClick={() => router.push('/signup')}
-                  >
+                  <Link href="/signup" className="inline-flex items-center justify-center bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-black font-semibold px-8 py-4 text-lg rounded-xl shadow-xl shadow-emerald-500/25 transition-all duration-200 hover:scale-105">
                     Get Started Free
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="border-zinc-700 text-white hover:bg-white/5 px-8 py-4 text-lg rounded-xl transition-all duration-200"
-                    onClick={() => router.push('/login')}
-                  >
+                  </Link>
+                  <Link href="/login" className="inline-flex items-center justify-center border border-zinc-700 text-white hover:bg-white/5 px-8 py-4 text-lg rounded-xl transition-all duration-200">
                     Schedule Demo
-                  </Button>
+                  </Link>
                 </div>
               </div>
             </div>
