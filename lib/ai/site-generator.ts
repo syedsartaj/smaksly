@@ -4,8 +4,8 @@
  *
  * Flow:
  * 1. Generate site plan (pages, sections, design system)
- * 2. Generate Header + Footer components
- * 3. Generate each page in parallel
+ * 2. Generate Header + Footer components (sequential)
+ * 3. Generate each page sequentially with delays
  */
 
 import { getAnthropic, CLAUDE_SONNET } from './claude-client';
@@ -126,94 +126,84 @@ export async function generateFullSite(params: {
     colorScheme: plan.data.designSystem.colorScheme,
   };
 
-  // Generate header and footer in parallel to save time
-  const [headerResult, footerResult] = await Promise.all([
-    generateComponent(
-      createHeaderPrompt({
-        ...designCtx,
-        description: headerDef?.description || 'Modern sticky header with navigation',
-        navLinks,
-      }),
-      'Header'
-    ),
-    generateComponent(
-      createFooterPrompt({
-        ...designCtx,
-        description: footerDef?.description || 'Professional footer with links and contact info',
-        navLinks,
-      }),
-      'Footer'
-    ),
-  ]);
+  // Generate header and footer sequentially to avoid rate limits
+  const headerResult = await generateComponent(
+    createHeaderPrompt({
+      ...designCtx,
+      description: headerDef?.description || 'Modern sticky header with navigation',
+      navLinks,
+    }),
+    'Header'
+  );
+  totalTokens += headerResult.tokensUsed;
+  progress('components', 'Header ready, generating Footer...', 25);
 
-  totalTokens += headerResult.tokensUsed + footerResult.tokensUsed;
+  await new Promise((r) => setTimeout(r, 2000));
+
+  const footerResult = await generateComponent(
+    createFooterPrompt({
+      ...designCtx,
+      description: footerDef?.description || 'Professional footer with links and contact info',
+      navLinks,
+    }),
+    'Footer'
+  );
+  totalTokens += footerResult.tokensUsed;
   const components: GeneratedComponent[] = [headerResult.component, footerResult.component];
 
   progress('components', 'Header & Footer ready', 35);
 
-  // ── STEP 3: Generate Pages (parallel, batched) ──
+  // ── STEP 3: Generate Pages (sequential to avoid rate limits) ──
   const pages: GeneratedPage[] = [];
   const totalPages = plan.data.pages.length;
   const allPageInfo = plan.data.pages.map((p) => ({ name: p.name, path: p.path }));
 
-  // Generate pages in parallel batches of 2 for speed
-  const BATCH_SIZE = 2;
-  for (let i = 0; i < plan.data.pages.length; i += BATCH_SIZE) {
-    const batch = plan.data.pages.slice(i, i + BATCH_SIZE);
-    const progressPct = 35 + ((i + batch.length) / totalPages) * 55;
-    progress('pages', `Generating ${batch.map((p) => p.name).join(' & ')} (${Math.min(i + BATCH_SIZE, totalPages)}/${totalPages})...`, Math.round(progressPct));
+  for (let i = 0; i < plan.data.pages.length; i++) {
+    const pageDef = plan.data.pages[i];
+    const progressPct = 35 + ((i + 1) / totalPages) * 55;
+    progress('pages', `Generating ${pageDef.name} (${i + 1}/${totalPages})...`, Math.round(progressPct));
 
-    // Small delay between batches (skip for first batch)
+    // Small delay between pages (skip for first page)
     if (i > 0) await new Promise((r) => setTimeout(r, 2000));
 
-    const batchResults = await Promise.all(
-      batch.map((pageDef) => {
-        let prompt: string;
+    let prompt: string;
 
-        if (pageDef.type === 'blog-listing') {
-          prompt = createBlogListingPrompt({
-            ...designCtx,
-            description: pageDef.description,
-          });
-        } else if (pageDef.type === 'blog-post') {
-          prompt = createBlogPostPrompt({
-            ...designCtx,
-            description: pageDef.description,
-          });
-        } else {
-          prompt = createPagePrompt({
-            ...designCtx,
-            pageName: pageDef.name,
-            pagePath: pageDef.path,
-            pageType: pageDef.type,
-            sections: pageDef.sections,
-            description: pageDef.description,
-            allPages: allPageInfo,
-          });
-        }
-
-        return generatePageCode(prompt, pageDef.name).then((result) => ({
-          pageDef,
-          result,
-        }));
-      })
-    );
-
-    for (const { pageDef, result } of batchResults) {
-      totalTokens += result.tokensUsed;
-      pages.push({
-        name: pageDef.name,
-        path: pageDef.path,
-        type: pageDef.type,
-        isHomePage: pageDef.isHomePage,
-        code: result.code,
-        isValid: result.isValid,
-        warnings: result.warnings,
-        errors: result.errors,
-        sections: pageDef.sections,
+    if (pageDef.type === 'blog-listing') {
+      prompt = createBlogListingPrompt({
+        ...designCtx,
         description: pageDef.description,
       });
+    } else if (pageDef.type === 'blog-post') {
+      prompt = createBlogPostPrompt({
+        ...designCtx,
+        description: pageDef.description,
+      });
+    } else {
+      prompt = createPagePrompt({
+        ...designCtx,
+        pageName: pageDef.name,
+        pagePath: pageDef.path,
+        pageType: pageDef.type,
+        sections: pageDef.sections,
+        description: pageDef.description,
+        allPages: allPageInfo,
+      });
     }
+
+    const result = await generatePageCode(prompt, pageDef.name);
+    totalTokens += result.tokensUsed;
+    pages.push({
+      name: pageDef.name,
+      path: pageDef.path,
+      type: pageDef.type,
+      isHomePage: pageDef.isHomePage,
+      code: result.code,
+      isValid: result.isValid,
+      warnings: result.warnings,
+      errors: result.errors,
+      sections: pageDef.sections,
+      description: pageDef.description,
+    });
   }
 
   // Collect errors
@@ -248,7 +238,7 @@ async function generateSitePlan(params: {
     return client.messages.create({
       model: CLAUDE_SONNET,
       max_tokens: 4000,
-      system: SITE_PLAN_SYSTEM_PROMPT,
+      system: [{ type: 'text', text: SITE_PLAN_SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
       messages: [
         { role: 'user', content: createSitePlanPrompt(params) },
       ],
@@ -351,7 +341,7 @@ async function generateComponent(
     const response = await client.messages.create({
       model: CLAUDE_SONNET,
       max_tokens: 8000,
-      system: COMPONENT_SYSTEM_PROMPT,
+      system: [{ type: 'text', text: COMPONENT_SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
       messages: [
         { role: 'user', content: prompt },
       ],
@@ -392,7 +382,7 @@ async function generatePageCode(
     const response = await client.messages.create({
       model: CLAUDE_SONNET,
       max_tokens: 8000,
-      system: PAGE_SYSTEM_PROMPT,
+      system: [{ type: 'text', text: PAGE_SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
       messages: [
         { role: 'user', content: prompt },
       ],

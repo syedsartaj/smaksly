@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/db';
-import { BuilderProject, BuilderPage, Website } from '@/models';
+import { BuilderProject, BuilderPage, Website, Category } from '@/models';
 import mongoose from 'mongoose';
 
 // GET - List all builder projects (with optional websiteId filter)
@@ -71,23 +71,6 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { websiteId, name, description, settings, blogConfig } = body;
 
-    // Validate websiteId
-    if (!websiteId || !mongoose.Types.ObjectId.isValid(websiteId)) {
-      return NextResponse.json(
-        { success: false, error: 'Valid website ID is required' },
-        { status: 400 }
-      );
-    }
-
-    // Check if website exists
-    const website = await Website.findById(websiteId);
-    if (!website) {
-      return NextResponse.json(
-        { success: false, error: 'Website not found' },
-        { status: 404 }
-      );
-    }
-
     // Validate name
     if (!name || typeof name !== 'string' || name.trim().length === 0) {
       return NextResponse.json(
@@ -96,19 +79,68 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    let resolvedWebsiteId: mongoose.Types.ObjectId;
+
+    if (websiteId && mongoose.Types.ObjectId.isValid(websiteId)) {
+      // Use existing website if provided
+      const website = await Website.findById(websiteId);
+      if (!website) {
+        return NextResponse.json(
+          { success: false, error: 'Website not found' },
+          { status: 404 }
+        );
+      }
+      resolvedWebsiteId = website._id;
+    } else {
+      // Auto-create a new website for this builder project
+      const siteName = settings?.siteName || name.trim();
+      const domain = siteName
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '');
+
+      // Get or create a default category for builder sites
+      let defaultCategory = await Category.findOne({ slug: 'builder-sites' });
+      if (!defaultCategory) {
+        defaultCategory = await Category.create({
+          name: 'Builder Sites',
+          slug: 'builder-sites',
+          description: 'Websites created via AI Website Builder',
+          isActive: true,
+          displayOrder: 999,
+        });
+      }
+
+      const website = await Website.create({
+        name: siteName,
+        domain: `${domain}-${Date.now().toString(36)}`,
+        niche: 'general',
+        categoryId: defaultCategory._id,
+        description: settings?.siteDescription || description?.trim() || '',
+        status: 'active',
+        themeConfig: {
+          primaryColor: settings?.primaryColor || '#10b981',
+          secondaryColor: settings?.secondaryColor || '#06b6d4',
+          fontFamily: settings?.fontFamily || 'Inter',
+        },
+      });
+
+      resolvedWebsiteId = website._id;
+    }
+
     // Create project with default settings
     const projectData = {
-      websiteId: new mongoose.Types.ObjectId(websiteId),
+      websiteId: resolvedWebsiteId,
       name: name.trim(),
       description: description?.trim() || '',
       status: 'draft',
       framework: 'nextjs',
       settings: {
-        primaryColor: settings?.primaryColor || website.themeConfig?.primaryColor || '#10b981',
-        secondaryColor: settings?.secondaryColor || website.themeConfig?.secondaryColor || '#06b6d4',
-        fontFamily: settings?.fontFamily || website.themeConfig?.fontFamily || 'Inter',
-        siteName: settings?.siteName || website.name || 'My Website',
-        siteDescription: settings?.siteDescription || website.description || '',
+        primaryColor: settings?.primaryColor || '#10b981',
+        secondaryColor: settings?.secondaryColor || '#06b6d4',
+        fontFamily: settings?.fontFamily || 'Inter',
+        siteName: settings?.siteName || name.trim(),
+        siteDescription: settings?.siteDescription || '',
         logo: settings?.logo || '',
         favicon: settings?.favicon || '',
         socialLinks: settings?.socialLinks || {},

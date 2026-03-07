@@ -17,7 +17,7 @@ import {
   extractCodeFromResponse,
   SanitizationResult,
 } from './code-sanitizer';
-import { getAnthropic, CLAUDE_MODEL, MAX_TOKENS } from './claude-client';
+import { getAnthropic, CLAUDE_SONNET, MAX_TOKENS } from './claude-client';
 
 // Lazy-load OpenAI client to avoid build-time errors (kept as fallback)
 let openaiClient: OpenAI | null = null;
@@ -40,9 +40,9 @@ function usesClaude(): boolean {
 async function callClaude(system: string, userMessage: string, maxTokens = MAX_TOKENS): Promise<string> {
   const client = getAnthropic();
   const response = await client.messages.create({
-    model: CLAUDE_MODEL,
+    model: CLAUDE_SONNET,
     max_tokens: maxTokens,
-    system,
+    system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
     messages: [{ role: 'user', content: userMessage }],
   });
   return response.content[0].type === 'text' ? response.content[0].text : '';
@@ -56,9 +56,9 @@ async function callClaudeConversation(
 ): Promise<string> {
   const client = getAnthropic();
   const response = await client.messages.create({
-    model: CLAUDE_MODEL,
+    model: CLAUDE_SONNET,
     max_tokens: maxTokens,
-    system,
+    system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
     messages,
   });
   return response.content[0].type === 'text' ? response.content[0].text : '';

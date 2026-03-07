@@ -1,20 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, Globe, RefreshCw, Palette, Type, FileText } from 'lucide-react';
-
-interface Website {
-  _id: string;
-  name: string;
-  domain: string;
-  niche: string;
-  themeConfig?: {
-    primaryColor?: string;
-    secondaryColor?: string;
-    fontFamily?: string;
-  };
-}
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { ArrowLeft, RefreshCw, Palette, Type, FileText } from 'lucide-react';
 
 const FONT_OPTIONS = [
   'Inter',
@@ -40,16 +28,11 @@ const COLOR_PRESETS = [
 
 export default function NewBuilderProjectPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const websiteIdFromUrl = searchParams.get('websiteId');
 
-  const [websites, setWebsites] = useState<Website[]>([]);
-  const [isLoadingWebsites, setIsLoadingWebsites] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Form state
-  const [selectedWebsiteId, setSelectedWebsiteId] = useState('');
   const [projectName, setProjectName] = useState('');
   const [projectDescription, setProjectDescription] = useState('');
   const [primaryColor, setPrimaryColor] = useState('#10b981');
@@ -59,60 +42,9 @@ export default function NewBuilderProjectPage() {
   const [siteDescription, setSiteDescription] = useState('');
   const [blogEnabled, setBlogEnabled] = useState(true);
 
-  // Fetch websites - include all statuses (not just active)
-  useEffect(() => {
-    async function fetchWebsites() {
-      try {
-        // Fetch all websites regardless of status
-        const response = await fetch('/api/websites?limit=100');
-        const data = await response.json();
-
-        if (data.success) {
-          setWebsites(data.data);
-
-          // Auto-select website from URL param
-          if (websiteIdFromUrl && data.data.some((w: Website) => w._id === websiteIdFromUrl)) {
-            setSelectedWebsiteId(websiteIdFromUrl);
-          }
-        }
-      } catch (error) {
-        console.error('Error fetching websites:', error);
-      } finally {
-        setIsLoadingWebsites(false);
-      }
-    }
-
-    fetchWebsites();
-  }, [websiteIdFromUrl]);
-
-  // Auto-fill when website is selected
-  useEffect(() => {
-    if (selectedWebsiteId) {
-      const website = websites.find((w) => w._id === selectedWebsiteId);
-      if (website) {
-        setProjectName(`${website.name} Website`);
-        setSiteName(website.name);
-        if (website.themeConfig?.primaryColor) {
-          setPrimaryColor(website.themeConfig.primaryColor);
-        }
-        if (website.themeConfig?.secondaryColor) {
-          setSecondaryColor(website.themeConfig.secondaryColor);
-        }
-        if (website.themeConfig?.fontFamily) {
-          setFontFamily(website.themeConfig.fontFamily);
-        }
-      }
-    }
-  }, [selectedWebsiteId, websites]);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-
-    if (!selectedWebsiteId) {
-      setError('Please select a website');
-      return;
-    }
 
     if (!projectName.trim()) {
       setError('Please enter a project name');
@@ -126,7 +58,6 @@ export default function NewBuilderProjectPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          websiteId: selectedWebsiteId,
           name: projectName.trim(),
           description: projectDescription.trim(),
           settings: {
@@ -188,57 +119,6 @@ export default function NewBuilderProjectPage() {
 
       {/* Form */}
       <form onSubmit={handleSubmit} className="space-y-8">
-        {/* Website Selection */}
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
-          <div className="flex items-center gap-3 mb-4">
-            <Globe className="h-5 w-5 text-emerald-500" />
-            <h2 className="text-lg font-semibold text-white">Select Website</h2>
-          </div>
-
-          {isLoadingWebsites ? (
-            <div className="flex items-center justify-center py-8">
-              <RefreshCw className="h-6 w-6 text-emerald-500 animate-spin" />
-            </div>
-          ) : websites.length === 0 ? (
-            <div className="text-center py-8">
-              <p className="text-zinc-400 mb-4">No websites found</p>
-              <button
-                type="button"
-                onClick={() => router.push('/admin/websites')}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg"
-              >
-                Create a website first
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <select
-                value={selectedWebsiteId}
-                onChange={(e) => setSelectedWebsiteId(e.target.value)}
-                className="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-lg text-white focus:outline-none focus:border-emerald-500"
-                required
-              >
-                <option value="">Choose a website...</option>
-                {websites.map((website) => (
-                  <option key={website._id} value={website._id}>
-                    {website.name} ({website.domain})
-                  </option>
-                ))}
-              </select>
-              <p className="text-sm text-zinc-500">
-                Don&apos;t see your website?{' '}
-                <button
-                  type="button"
-                  onClick={() => router.push('/admin/websites')}
-                  className="text-emerald-500 hover:text-emerald-400"
-                >
-                  Create a new website
-                </button>
-              </p>
-            </div>
-          )}
-        </div>
-
         {/* Project Details */}
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
           <div className="flex items-center gap-3 mb-4">
@@ -447,7 +327,7 @@ export default function NewBuilderProjectPage() {
           </button>
           <button
             type="submit"
-            disabled={isCreating || !selectedWebsiteId}
+            disabled={isCreating}
             className="flex items-center gap-2 px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isCreating ? (
