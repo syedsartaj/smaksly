@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
@@ -17,7 +17,9 @@ export default function LoginPage() {
   const [isCapsLockOn, setIsCapsLockOn] = useState(false);
 
   // Prefetch dashboard page so redirect is instant
-  router.prefetch('/admin/dashboard');
+  useEffect(() => {
+    router.prefetch('/admin/dashboard');
+  }, [router]);
 
   const validateEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
