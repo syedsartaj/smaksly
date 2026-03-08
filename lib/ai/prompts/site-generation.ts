@@ -5,7 +5,7 @@
 
 // ─── STEP 1: Site Plan ───
 
-export const SITE_PLAN_SYSTEM_PROMPT = `You are a senior web architect. Given a user's website description, create a detailed site plan as JSON.
+export const SITE_PLAN_SYSTEM_PROMPT = `You are a senior web architect and SEO expert. Given a user's website description, create a detailed site plan as JSON.
 
 You must respond ONLY with valid JSON — no markdown, no explanation, no code fences.
 
@@ -25,7 +25,9 @@ The JSON schema:
       "type": "static | blog-listing | blog-post",
       "isHomePage": true/false,
       "sections": ["string — section names, e.g. Hero, Features, Testimonials"],
-      "description": "string — what this page should contain"
+      "description": "string — what this page should contain",
+      "metaTitle": "string — SEO title tag (50-60 chars, include primary keyword)",
+      "metaDescription": "string — SEO meta description (120-155 chars, include keywords naturally)"
     }
   ],
   "components": [
@@ -49,20 +51,51 @@ Rules:
 - Keep pages between 3-7 for a typical site
 - Each page should have 3-6 sections
 - Infer reasonable pages from context (e.g. "restaurant" → Home, Menu, About, Contact, Blog)
-- navLinks in Header should match the pages list`;
+- navLinks in Header should match the pages list
+- Each page MUST have metaTitle and metaDescription optimized for SEO
+- If target keywords are provided, weave them naturally into page descriptions and meta tags
+- If a niche/industry is provided, tailor sections to that industry's best practices`;
 
 export function createSitePlanPrompt(params: {
   userPrompt: string;
   siteName: string;
   primaryColor: string;
   secondaryColor: string;
+  seoContext?: {
+    niche?: string;
+    country?: string;
+    region?: string;
+    targetKeywords?: string[];
+    schemaType?: string;
+    language?: string;
+  };
 }): string {
+  let seoSection = '';
+  if (params.seoContext) {
+    const ctx = params.seoContext;
+    const lines: string[] = [];
+    lines.push('SEO CONTEXT:');
+    if (ctx.niche) lines.push('- Industry/Niche: ' + ctx.niche);
+    if (ctx.country) lines.push('- Target Country: ' + ctx.country);
+    if (ctx.region) lines.push('- Target Region: ' + ctx.region);
+    if (ctx.language) lines.push('- Language: ' + ctx.language);
+    if (ctx.targetKeywords && ctx.targetKeywords.length > 0) lines.push('- Target Keywords: ' + ctx.targetKeywords.join(', '));
+    if (ctx.schemaType) lines.push('- Schema Type: ' + ctx.schemaType);
+    lines.push('');
+    lines.push('Use this SEO context to:');
+    lines.push('- Write keyword-optimized metaTitle and metaDescription for each page');
+    lines.push('- Tailor page sections to the industry (e.g. "Services" for agencies, "Menu" for restaurants)');
+    lines.push('- Include region/location in meta tags if it is a local business');
+    lines.push('- Plan content around the target keywords');
+    seoSection = '\n' + lines.join('\n') + '\n';
+  }
+
   return `Create a site plan for this website:
 
 Site Name: ${params.siteName}
 Primary Color: ${params.primaryColor}
 Secondary Color: ${params.secondaryColor}
-
+${seoSection}
 User Request:
 ${params.userPrompt}
 
@@ -165,7 +198,7 @@ Generate the Footer component code now:`;
 
 // ─── STEP 3: Page Generation ───
 
-export const PAGE_SYSTEM_PROMPT = `You are an expert Next.js/React developer generating a production-ready page component.
+export const PAGE_SYSTEM_PROMPT = `You are an expert Next.js/React developer and SEO specialist generating a production-ready page component.
 
 CRITICAL RULES:
 1. Output ONLY the raw TSX code — no markdown, no code fences, no explanation
@@ -182,7 +215,15 @@ CRITICAL RULES:
 12. Export default function PageName()
 13. Each section should use <section> tags
 14. Use consistent spacing between sections (py-16 md:py-24)
-15. Use the exact color values provided in the design system`;
+15. Use the exact color values provided in the design system
+
+SEO RULES:
+- Use proper heading hierarchy (one H1 per page, then H2, H3)
+- Include descriptive alt text on all images
+- Use semantic HTML5 elements (<article>, <section>, <nav>, <aside>)
+- Add aria-labels on interactive elements
+- If target keywords are provided, use them naturally in headings and body text — never keyword-stuff
+- For local businesses, mention the city/region naturally in content`;
 
 export function createPagePrompt(params: {
   pageName: string;
@@ -197,9 +238,34 @@ export function createPagePrompt(params: {
   designStyle: string;
   colorScheme: string;
   allPages: Array<{ name: string; path: string }>;
+  seoContext?: {
+    niche?: string;
+    country?: string;
+    region?: string;
+    targetKeywords?: string[];
+    schemaType?: string;
+    metaTitle?: string;
+    metaDescription?: string;
+  };
 }): string {
   const sectionsStr = params.sections.map((s, i) => `${i + 1}. ${s}`).join('\n');
   const pagesStr = params.allPages.map((p) => `- ${p.name}: ${p.path}`).join('\n');
+
+  let seoSection = '';
+  if (params.seoContext) {
+    const ctx = params.seoContext;
+    const lines: string[] = [];
+    lines.push('SEO OPTIMIZATION:');
+    if (ctx.niche) lines.push('- Industry: ' + ctx.niche + ' — use industry-appropriate language and terminology');
+    if (ctx.targetKeywords && ctx.targetKeywords.length > 0) lines.push('- Target Keywords: ' + ctx.targetKeywords.join(', ') + ' — weave these naturally into H1, H2 headings and body copy. Never keyword-stuff.');
+    if (ctx.region) lines.push('- Location: ' + ctx.region + (ctx.country ? ', ' + ctx.country : '') + ' — mention location naturally for local SEO');
+    if (ctx.schemaType === 'LocalBusiness') lines.push('- This is a LOCAL BUSINESS — include location mentions, service area references, and local trust signals');
+    lines.push('- Use exactly ONE <h1> tag per page — make it compelling and keyword-rich');
+    lines.push('- Use proper heading hierarchy (h1 → h2 → h3)');
+    lines.push('- All images must have descriptive alt text (not "image" or "photo")');
+    lines.push('- Use <section> with aria-label for screen readers');
+    seoSection = '\n' + lines.join('\n');
+  }
 
   return `Generate the "${params.pageName}" page (${params.pagePath}) for "${params.siteName}".
 
@@ -218,6 +284,7 @@ ${sectionsStr}
 
 SITE PAGES (for internal links):
 ${pagesStr}
+${seoSection}
 
 REQUIREMENTS:
 - Generate each section listed above in order

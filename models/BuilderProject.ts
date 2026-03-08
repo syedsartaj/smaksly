@@ -18,6 +18,22 @@ export interface ISeoMetadata {
   themeColor?: string;
 }
 
+export interface ISeoConfig {
+  niche?: string;
+  country?: string;
+  region?: string;
+  language?: string;
+  targetKeywords?: string[];
+  schemaType?: 'Organization' | 'LocalBusiness' | 'Product' | 'Blog' | 'WebSite' | 'Person';
+  businessName?: string;
+  businessAddress?: string;
+  businessPhone?: string;
+  businessEmail?: string;
+  generateSitemap?: boolean;
+  generateRobotsTxt?: boolean;
+  canonicalBase?: string;
+}
+
 export interface ILanguageConfig {
   code: string;
   name: string;
@@ -35,6 +51,7 @@ export interface IBuilderProjectSettings {
   logo?: string;
   branding?: IBuilderProjectBranding;
   seoMetadata?: ISeoMetadata;
+  seoConfig?: ISeoConfig;
   languages?: ILanguageConfig[];
   defaultLanguage?: string;
   socialLinks?: {
@@ -152,6 +169,21 @@ const BuilderProjectSchema = new Schema<IBuilderProject>(
         twitterCard: { type: String, enum: ['summary', 'summary_large_image'] },
         twitterHandle: { type: String },
         themeColor: { type: String },
+      },
+      seoConfig: {
+        niche: { type: String, trim: true },
+        country: { type: String, default: 'US' },
+        region: { type: String, trim: true },
+        language: { type: String, default: 'en' },
+        targetKeywords: [{ type: String, trim: true }],
+        schemaType: { type: String, enum: ['Organization', 'LocalBusiness', 'Product', 'Blog', 'WebSite', 'Person'], default: 'WebSite' },
+        businessName: { type: String, trim: true },
+        businessAddress: { type: String, trim: true },
+        businessPhone: { type: String, trim: true },
+        businessEmail: { type: String, trim: true },
+        generateSitemap: { type: Boolean, default: true },
+        generateRobotsTxt: { type: Boolean, default: true },
+        canonicalBase: { type: String, trim: true },
       },
       languages: [{
         code: { type: String, required: true },

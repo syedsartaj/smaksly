@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, RefreshCw, Palette, Type, FileText } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Palette, Type, FileText, Search, MapPin, Globe, Building2 } from 'lucide-react';
 
 const FONT_OPTIONS = [
   'Inter',
@@ -42,6 +42,17 @@ export default function NewBuilderProjectPage() {
   const [siteDescription, setSiteDescription] = useState('');
   const [blogEnabled, setBlogEnabled] = useState(true);
 
+  // SEO Config
+  const [niche, setNiche] = useState('');
+  const [country, setCountry] = useState('US');
+  const [region, setRegion] = useState('');
+  const [targetKeywords, setTargetKeywords] = useState('');
+  const [schemaType, setSchemaType] = useState<string>('WebSite');
+  const [businessName, setBusinessName] = useState('');
+  const [businessAddress, setBusinessAddress] = useState('');
+  const [businessPhone, setBusinessPhone] = useState('');
+  const [businessEmail, setBusinessEmail] = useState('');
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -66,6 +77,19 @@ export default function NewBuilderProjectPage() {
             fontFamily,
             siteName: siteName.trim() || projectName.trim(),
             siteDescription: siteDescription.trim(),
+            seoConfig: {
+              niche: niche.trim() || undefined,
+              country,
+              region: region.trim() || undefined,
+              targetKeywords: targetKeywords.trim() ? targetKeywords.split(',').map(k => k.trim()).filter(Boolean) : undefined,
+              schemaType,
+              businessName: businessName.trim() || undefined,
+              businessAddress: businessAddress.trim() || undefined,
+              businessPhone: businessPhone.trim() || undefined,
+              businessEmail: businessEmail.trim() || undefined,
+              generateSitemap: true,
+              generateRobotsTxt: true,
+            },
           },
           blogConfig: {
             enabled: blogEnabled,
@@ -289,6 +313,155 @@ export default function NewBuilderProjectPage() {
                 ))}
               </select>
             </div>
+          </div>
+        </div>
+
+        {/* SEO Configuration */}
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <Search className="h-5 w-5 text-emerald-500" />
+            <div>
+              <h2 className="text-lg font-semibold text-white">SEO Configuration</h2>
+              <p className="text-sm text-zinc-400">Help AI build SEO-optimized pages</p>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            {/* Niche & Schema Type */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-zinc-300 mb-2">
+                  <Globe className="h-3.5 w-3.5 inline mr-1.5" />Industry / Niche
+                </label>
+                <input
+                  type="text"
+                  value={niche}
+                  onChange={(e) => setNiche(e.target.value)}
+                  placeholder="e.g. Restaurant, SaaS, E-commerce"
+                  className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-zinc-300 mb-2">
+                  <Building2 className="h-3.5 w-3.5 inline mr-1.5" />Schema Type
+                </label>
+                <select
+                  value={schemaType}
+                  onChange={(e) => setSchemaType(e.target.value)}
+                  className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-white focus:outline-none focus:border-emerald-500"
+                >
+                  <option value="WebSite">Website (General)</option>
+                  <option value="LocalBusiness">Local Business</option>
+                  <option value="Organization">Organization</option>
+                  <option value="Product">Product</option>
+                  <option value="Blog">Blog</option>
+                  <option value="Person">Person / Portfolio</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Country & Region */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-zinc-300 mb-2">
+                  <MapPin className="h-3.5 w-3.5 inline mr-1.5" />Country
+                </label>
+                <select
+                  value={country}
+                  onChange={(e) => setCountry(e.target.value)}
+                  className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-white focus:outline-none focus:border-emerald-500"
+                >
+                  <option value="US">United States</option>
+                  <option value="GB">United Kingdom</option>
+                  <option value="AE">UAE</option>
+                  <option value="SA">Saudi Arabia</option>
+                  <option value="IN">India</option>
+                  <option value="CA">Canada</option>
+                  <option value="AU">Australia</option>
+                  <option value="DE">Germany</option>
+                  <option value="FR">France</option>
+                  <option value="JP">Japan</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-zinc-300 mb-2">
+                  City / Region
+                </label>
+                <input
+                  type="text"
+                  value={region}
+                  onChange={(e) => setRegion(e.target.value)}
+                  placeholder="e.g. Dubai, New York, London"
+                  className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+            </div>
+
+            {/* Target Keywords */}
+            <div>
+              <label className="block text-sm font-medium text-zinc-300 mb-2">
+                Target Keywords
+              </label>
+              <input
+                type="text"
+                value={targetKeywords}
+                onChange={(e) => setTargetKeywords(e.target.value)}
+                placeholder="web design, digital marketing, SEO services (comma separated)"
+                className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500"
+              />
+              <p className="text-xs text-zinc-600 mt-1">AI will optimize headings and content around these keywords</p>
+            </div>
+
+            {/* Business Info (shown for LocalBusiness / Organization) */}
+            {(schemaType === 'LocalBusiness' || schemaType === 'Organization') && (
+              <div className="border-t border-zinc-800 pt-4 mt-4 space-y-4">
+                <p className="text-xs text-zinc-500 font-medium uppercase tracking-wide">Business Details (for Schema.org)</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-300 mb-2">Business Name</label>
+                    <input
+                      type="text"
+                      value={businessName}
+                      onChange={(e) => setBusinessName(e.target.value)}
+                      placeholder="Acme Corp"
+                      className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-300 mb-2">Phone</label>
+                    <input
+                      type="text"
+                      value={businessPhone}
+                      onChange={(e) => setBusinessPhone(e.target.value)}
+                      placeholder="+1 555-123-4567"
+                      className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-300 mb-2">Email</label>
+                    <input
+                      type="email"
+                      value={businessEmail}
+                      onChange={(e) => setBusinessEmail(e.target.value)}
+                      placeholder="info@example.com"
+                      className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-300 mb-2">Address</label>
+                    <input
+                      type="text"
+                      value={businessAddress}
+                      onChange={(e) => setBusinessAddress(e.target.value)}
+                      placeholder="123 Main St, City, State"
+                      className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

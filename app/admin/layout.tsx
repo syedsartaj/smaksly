@@ -32,14 +32,18 @@ const navigation = [
       { name: 'Overview', href: '/admin/seo' },
       { name: 'Search Console', href: '/admin/seo/search-console' },
       { name: 'Analytics', href: '/admin/seo/analytics' },
-      { name: 'Rankings', href: '/admin/seo/rankings' },
-      { name: 'Indexing', href: '/admin/seo/indexing' },
+      { name: 'AI Fixer', href: '/admin/seo/fixer' },
     ],
   },
   {
     name: 'Keywords',
     href: '/admin/keywords',
     icon: Key,
+    children: [
+      { name: 'Research', href: '/admin/keywords' },
+      { name: 'Groups', href: '/admin/keywords/groups' },
+      { name: 'Rankings', href: '/admin/keywords/rankings' },
+    ],
   },
   {
     name: 'Website Builder',

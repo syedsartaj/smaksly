@@ -542,13 +542,14 @@ body {
   // Resolve favicon and SEO metadata
   const faviconUrl = settings.branding?.websiteIcon || settings.favicon || '';
   const seoMetadata = settings.seoMetadata || {};
+  const seoConfig = settings.seoConfig || {};
   const ogImage = seoMetadata.ogImage || '';
   const twitterCard = seoMetadata.twitterCard || 'summary_large_image';
   const twitterHandle = seoMetadata.twitterHandle || '';
   const themeColor = seoMetadata.themeColor || '';
   const siteDescription = settings.siteDescription || '';
-  const defaultLanguage = settings.defaultLanguage || 'en';
-  const deploymentUrl = project.deploymentUrl || '';
+  const defaultLanguage = settings.defaultLanguage || seoConfig.language || 'en';
+  const deploymentUrl = project.deploymentUrl || seoConfig.canonicalBase || '';
 
   // Build metadata object pieces
   const metadataLines: string[] = [];
@@ -600,6 +601,33 @@ body {
     metadataLines.push(`  themeColor: '${themeColor}',`);
   }
 
+  // Build JSON-LD structured data based on schema type
+  let jsonLdScript = '';
+  const schemaType = seoConfig.schemaType || 'WebSite';
+  const jsonLdObj: Record<string, unknown> = {
+    '@context': 'https://schema.org',
+    '@type': schemaType,
+    name: seoConfig.businessName || siteName,
+    url: deploymentUrl || undefined,
+    description: siteDescription || undefined,
+  };
+
+  if (schemaType === 'LocalBusiness' || schemaType === 'Organization') {
+    if (seoConfig.businessAddress) jsonLdObj.address = { '@type': 'PostalAddress', streetAddress: seoConfig.businessAddress };
+    if (seoConfig.businessPhone) jsonLdObj.telephone = seoConfig.businessPhone;
+    if (seoConfig.businessEmail) jsonLdObj.email = seoConfig.businessEmail;
+    if (seoConfig.region) jsonLdObj.areaServed = seoConfig.region;
+  }
+
+  // Remove undefined values
+  Object.keys(jsonLdObj).forEach(k => { if (jsonLdObj[k] === undefined) delete jsonLdObj[k]; });
+
+  jsonLdScript = `
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(${JSON.stringify(jsonLdObj)}) }}
+        />`;
+
   // Generate layout.tsx
   const layoutCode = `import type { Metadata } from 'next';
 import './globals.css';
@@ -619,7 +647,7 @@ export default function RootLayout({
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link href="https://fonts.googleapis.com/css2?family=${fontFamily.replace(/ /g, '+')}:wght@400;500;600;700&display=swap" rel="stylesheet" />
+        <link href="https://fonts.googleapis.com/css2?family=${fontFamily.replace(/ /g, '+')}:wght@400;500;600;700&display=swap" rel="stylesheet" />${jsonLdScript}
       </head>
       <body className="min-h-screen bg-white antialiased">
         ${headerJsx}

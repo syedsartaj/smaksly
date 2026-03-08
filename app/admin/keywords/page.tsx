@@ -1,40 +1,40 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Search,
-  Plus,
   RefreshCw,
   Sparkles,
   FolderTree,
   TrendingUp,
+  TrendingDown,
+  Minus,
   Target,
   DollarSign,
-  Filter,
   Download,
   Upload,
   Trash2,
-  ChevronDown,
+  Filter,
   ArrowUpDown,
   MoreHorizontal,
+  Database,
+  ArrowRight,
+  BarChart3,
+  Hash,
 } from 'lucide-react';
 import { formatNumber } from '@/lib/utils';
 
-interface KeywordData {
+interface KeywordMaster {
   _id: string;
   keyword: string;
+  country: string;
   volume: number;
-  difficulty: number;
+  kd: number;
   cpc: number;
-  intent: string;
-  status: string;
-  priority: string;
-  topic?: string;
-  clusterId?: string;
-  clusterName?: string;
-  websiteId?: { _id: string; name: string; domain: string };
-  categoryId?: { _id: string; name: string };
-  createdAt: string;
+  trend: 'rising' | 'stable' | 'declining';
+  provider: string;
+  lastRefreshedAt: string;
 }
 
 interface KeywordStats {
@@ -46,9 +46,6 @@ interface KeywordStats {
     clusteredCount: number;
     assignedCount: number;
   };
-  intentDistribution: Array<{ _id: string; count: number; totalVolume: number }>;
-  difficultyDistribution: Array<{ label: string; count: number; totalVolume: number }>;
-  topKeywords: Array<{ keyword: string; volume: number; difficulty: number }>;
 }
 
 interface Website {
@@ -57,206 +54,124 @@ interface Website {
   domain: string;
 }
 
-export default function KeywordsPage() {
-  const [activeNav, setActiveNav] = useState<'keywords' | 'groups' | 'history' | 'master'>('keywords');
+const TREND_ICON = {
+  rising: <TrendingUp className="h-3.5 w-3.5 text-emerald-400" />,
+  stable: <Minus className="h-3.5 w-3.5 text-zinc-400" />,
+  declining: <TrendingDown className="h-3.5 w-3.5 text-red-400" />,
+};
 
-  // Nav redirect helper
-  const handleNavChange = (tab: typeof activeNav) => {
-    setActiveNav(tab);
-    if (tab === 'groups') window.location.href = '/admin/keywords/groups';
-    if (tab === 'history') window.location.href = '/admin/keywords/history';
-    if (tab === 'master') window.location.href = '/admin/keywords/master';
-  };
+const KD_COLOR = (kd: number) =>
+  kd <= 20 ? 'text-emerald-400 bg-emerald-900/20' :
+  kd <= 50 ? 'text-yellow-400 bg-yellow-900/20' :
+  kd <= 70 ? 'text-orange-400 bg-orange-900/20' :
+  'text-red-400 bg-red-900/20';
 
-  const [keywords, setKeywords] = useState<KeywordData[]>([]);
+export default function KeywordResearchPage() {
+  const router = useRouter();
+  const [activeView, setActiveView] = useState<'library' | 'website'>('library');
+  const [masterKeywords, setMasterKeywords] = useState<KeywordMaster[]>([]);
   const [stats, setStats] = useState<KeywordStats | null>(null);
   const [websites, setWebsites] = useState<Website[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [selectedKeywords, setSelectedKeywords] = useState<string[]>([]);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
-  // Filters
-  const [filters, setFilters] = useState({
-    search: '',
-    websiteId: '',
-    intent: '',
-    difficulty: '',
-    status: '',
-  });
-
-  // Pagination
+  // Master library filters
+  const [q, setQ] = useState('');
+  const [country, setCountry] = useState('');
+  const [trend, setTrend] = useState('');
+  const [minVolume, setMinVolume] = useState('');
+  const [maxKD, setMaxKD] = useState('');
+  const [sortBy, setSortBy] = useState('volume');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [total, setTotal] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
 
   // Modals
   const [showResearchModal, setShowResearchModal] = useState(false);
-  const [showClusterModal, setShowClusterModal] = useState(false);
 
-  // Fetch keywords
-  const fetchKeywords = useCallback(async () => {
+  // Fetch master keywords
+  const fetchMaster = useCallback(async () => {
     setIsLoading(true);
     try {
       const params = new URLSearchParams({
         page: page.toString(),
         limit: '50',
-        ...(filters.search && { search: filters.search }),
-        ...(filters.websiteId && { websiteId: filters.websiteId }),
-        ...(filters.intent && { intent: filters.intent }),
-        ...(filters.difficulty && { difficulty: filters.difficulty }),
-        ...(filters.status && { status: filters.status }),
+        sortBy,
+        ...(q && { q }),
+        ...(country && { country }),
+        ...(trend && { trend }),
+        ...(minVolume && { minVolume }),
+        ...(maxKD && { maxKD }),
       });
-
-      const res = await fetch(`/api/keywords?${params}`);
+      const res = await fetch(`/api/keywords/master?${params}`);
       const data = await res.json();
-
       if (data.success) {
-        setKeywords(data.data);
-        setTotalPages(data.pagination.totalPages);
-        setTotal(data.pagination.total);
+        setMasterKeywords(data.data);
+        setTotalPages(data.pagination.pages);
+        setTotalCount(data.pagination.total);
       }
-    } catch (error) {
-      console.error('Failed to fetch keywords:', error);
     } finally {
       setIsLoading(false);
     }
-  }, [page, filters]);
+  }, [page, q, country, trend, minVolume, maxKD, sortBy]);
 
-  // Fetch stats and websites
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [statsRes, websitesRes] = await Promise.all([
-          fetch('/api/keywords/stats'),
-          fetch('/api/websites?limit=100'),
-        ]);
+    fetchMaster();
+  }, [fetchMaster]);
 
-        const [statsData, websitesData] = await Promise.all([
-          statsRes.json(),
-          websitesRes.json(),
-        ]);
-
-        if (statsData.success) {
-          setStats(statsData.data);
-        }
-        if (websitesData.success) {
-          setWebsites(websitesData.data);
-        }
-      } catch (error) {
-        console.error('Failed to fetch data:', error);
-      }
-    };
-    fetchData();
+  useEffect(() => {
+    Promise.all([
+      fetch('/api/keywords/stats').then((r) => r.json()),
+      fetch('/api/websites?limit=100').then((r) => r.json()),
+    ]).then(([statsData, websitesData]) => {
+      if (statsData.success) setStats(statsData.data);
+      if (websitesData.success) setWebsites(websitesData.data);
+    });
   }, []);
 
-  useEffect(() => {
-    fetchKeywords();
-  }, [fetchKeywords]);
+  const handleDelete = async (id: string) => {
+    if (!confirm('Delete this keyword? This cannot be undone.')) return;
+    await fetch(`/api/keywords/master?id=${id}`, { method: 'DELETE' });
+    fetchMaster();
+  };
 
-  const handleSelectAll = () => {
-    if (selectedKeywords.length === keywords.length) {
-      setSelectedKeywords([]);
-    } else {
-      setSelectedKeywords(keywords.map((k) => k._id));
+  const handleBulkDelete = async () => {
+    if (!confirm(`Delete ${selectedIds.length} keywords?`)) return;
+    for (const id of selectedIds) {
+      await fetch(`/api/keywords/master?id=${id}`, { method: 'DELETE' });
     }
+    setSelectedIds([]);
+    fetchMaster();
   };
 
-  const handleDelete = async () => {
-    if (!confirm(`Delete ${selectedKeywords.length} keywords?`)) return;
+  const toggleSelect = (id: string) =>
+    setSelectedIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
 
-    try {
-      const res = await fetch('/api/keywords', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: selectedKeywords }),
-      });
-
-      const data = await res.json();
-      if (data.success) {
-        setSelectedKeywords([]);
-        fetchKeywords();
-      }
-    } catch (error) {
-      console.error('Failed to delete keywords:', error);
-    }
-  };
-
-  const getDifficultyColor = (difficulty: number) => {
-    if (difficulty <= 30) return 'text-emerald-400 bg-emerald-900/20';
-    if (difficulty <= 60) return 'text-yellow-400 bg-yellow-900/20';
-    return 'text-red-400 bg-red-900/20';
-  };
-
-  const getIntentColor = (intent: string) => {
-    switch (intent) {
-      case 'informational':
-        return 'bg-blue-900/20 text-blue-400';
-      case 'commercial':
-        return 'bg-purple-900/20 text-purple-400';
-      case 'transactional':
-        return 'bg-emerald-900/20 text-emerald-400';
-      case 'navigational':
-        return 'bg-orange-900/20 text-orange-400';
-      default:
-        return 'bg-zinc-800 text-zinc-400';
-    }
-  };
+  const toggleSelectAll = () =>
+    setSelectedIds(selectedIds.length === masterKeywords.length ? [] : masterKeywords.map((k) => k._id));
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white">
       {/* Header */}
       <div className="border-b border-zinc-800 bg-zinc-900/50">
         <div className="max-w-7xl mx-auto px-6 py-6">
-          {/* Sub-navigation */}
-          <div className="flex items-center gap-1 mb-5">
-            {[
-              { key: 'keywords', label: 'Website Keywords' },
-              { key: 'master', label: 'Master Library' },
-              { key: 'groups', label: 'Keyword Groups' },
-              { key: 'history', label: 'Ranking History' },
-            ].map((nav) => (
-              <button
-                key={nav.key}
-                onClick={() => handleNavChange(nav.key as typeof activeNav)}
-                className={`px-4 py-2 text-sm font-medium rounded-lg ${
-                  activeNav === nav.key
-                    ? 'bg-emerald-600 text-white'
-                    : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
-                }`}
-              >
-                {nav.label}
-              </button>
-            ))}
-          </div>
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold">Keyword Research</h1>
+              <h1 className="text-2xl font-bold flex items-center gap-2">
+                <Search className="h-6 w-6 text-emerald-400" />
+                Keyword Research
+              </h1>
               <p className="text-zinc-400 mt-1">
-                {total} keywords in your database
+                {totalCount.toLocaleString()} keywords in your master library
               </p>
             </div>
             <div className="flex items-center gap-3">
               <button
-                onClick={fetchKeywords}
+                onClick={fetchMaster}
                 className="flex items-center gap-2 px-4 py-2 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800"
               >
                 <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
                 Refresh
-              </button>
-              <button className="flex items-center gap-2 px-4 py-2 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800">
-                <Download className="h-4 w-4" />
-                Export
-              </button>
-              <button className="flex items-center gap-2 px-4 py-2 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800">
-                <Upload className="h-4 w-4" />
-                Import
-              </button>
-              <button
-                onClick={() => setShowClusterModal(true)}
-                disabled={selectedKeywords.length === 0}
-                className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg disabled:opacity-50"
-              >
-                <FolderTree className="h-4 w-4" />
-                Cluster
               </button>
               <button
                 onClick={() => setShowResearchModal(true)}
@@ -270,14 +185,45 @@ export default function KeywordsPage() {
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-6 py-6">
+      <div className="max-w-7xl mx-auto px-6 py-6 space-y-6">
+        {/* Quick Navigation */}
+        <div className="grid grid-cols-2 gap-4">
+          <button
+            onClick={() => router.push('/admin/keywords/groups')}
+            className="flex items-center gap-4 p-4 bg-zinc-900 border border-zinc-800 hover:border-purple-500/50 rounded-xl text-left transition-all group"
+          >
+            <div className="p-3 bg-purple-500/20 rounded-xl">
+              <FolderTree className="h-5 w-5 text-purple-400" />
+            </div>
+            <div className="flex-1">
+              <p className="font-semibold">Keyword Groups</p>
+              <p className="text-xs text-zinc-500 mt-0.5">AI-clustered topics for blog planning</p>
+            </div>
+            <ArrowRight className="h-4 w-4 text-zinc-600 group-hover:text-purple-400" />
+          </button>
+
+          <button
+            onClick={() => router.push('/admin/keywords/rankings')}
+            className="flex items-center gap-4 p-4 bg-zinc-900 border border-zinc-800 hover:border-blue-500/50 rounded-xl text-left transition-all group"
+          >
+            <div className="p-3 bg-blue-500/20 rounded-xl">
+              <BarChart3 className="h-5 w-5 text-blue-400" />
+            </div>
+            <div className="flex-1">
+              <p className="font-semibold">Rankings</p>
+              <p className="text-xs text-zinc-500 mt-0.5">Daily keyword ranking trends from GSC</p>
+            </div>
+            <ArrowRight className="h-4 w-4 text-zinc-600 group-hover:text-blue-400" />
+          </button>
+        </div>
+
         {/* Stats Cards */}
         {stats && (
-          <div className="grid grid-cols-5 gap-4 mb-6">
+          <div className="grid grid-cols-4 gap-4">
             <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-blue-500/20 rounded-lg">
-                  <Search className="h-5 w-5 text-blue-400" />
+                  <Database className="h-5 w-5 text-blue-400" />
                 </div>
                 <div>
                   <p className="text-sm text-zinc-400">Total Keywords</p>
@@ -285,7 +231,6 @@ export default function KeywordsPage() {
                 </div>
               </div>
             </div>
-
             <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-emerald-500/20 rounded-lg">
@@ -297,7 +242,6 @@ export default function KeywordsPage() {
                 </div>
               </div>
             </div>
-
             <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-orange-500/20 rounded-lg">
@@ -306,30 +250,19 @@ export default function KeywordsPage() {
                 <div>
                   <p className="text-sm text-zinc-400">Avg Difficulty</p>
                   <p className="text-2xl font-bold">{stats.totals.avgDifficulty.toFixed(0)}</p>
+                  <p className="text-xs text-zinc-600">Lower is easier to rank</p>
                 </div>
               </div>
             </div>
-
             <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-purple-500/20 rounded-lg">
-                  <DollarSign className="h-5 w-5 text-purple-400" />
-                </div>
-                <div>
-                  <p className="text-sm text-zinc-400">Avg CPC</p>
-                  <p className="text-2xl font-bold">${stats.totals.avgCpc.toFixed(2)}</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-pink-500/20 rounded-lg">
-                  <FolderTree className="h-5 w-5 text-pink-400" />
+                  <FolderTree className="h-5 w-5 text-purple-400" />
                 </div>
                 <div>
                   <p className="text-sm text-zinc-400">Clustered</p>
                   <p className="text-2xl font-bold">{formatNumber(stats.totals.clusteredCount)}</p>
+                  <p className="text-xs text-zinc-600">Grouped into blog topics</p>
                 </div>
               </div>
             </div>
@@ -337,193 +270,165 @@ export default function KeywordsPage() {
         )}
 
         {/* Filters */}
-        <div className="flex items-center gap-4 mb-6">
-          <div className="flex items-center gap-2 text-zinc-400">
-            <Filter className="h-4 w-4" />
-            <span className="text-sm">Filters:</span>
-          </div>
-
-          <div className="relative flex-1 max-w-xs">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="relative flex-1 min-w-[200px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
             <input
               type="text"
+              value={q}
+              onChange={(e) => { setQ(e.target.value); setPage(1); }}
               placeholder="Search keywords..."
-              value={filters.search}
-              onChange={(e) => setFilters({ ...filters, search: e.target.value })}
-              className="w-full pl-10 pr-4 py-1.5 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              className="w-full pl-10 pr-4 py-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
             />
           </div>
-
           <select
-            value={filters.websiteId}
-            onChange={(e) => setFilters({ ...filters, websiteId: e.target.value })}
-            className="px-3 py-1.5 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            value={country}
+            onChange={(e) => { setCountry(e.target.value); setPage(1); }}
+            className="px-3 py-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-sm text-white"
           >
-            <option value="">All Websites</option>
-            {websites.map((w) => (
-              <option key={w._id} value={w._id}>
-                {w.name}
-              </option>
-            ))}
+            <option value="">All Countries</option>
+            <option value="US">US</option>
+            <option value="GB">GB</option>
+            <option value="AE">AE</option>
+            <option value="CA">CA</option>
+            <option value="AU">AU</option>
           </select>
-
           <select
-            value={filters.intent}
-            onChange={(e) => setFilters({ ...filters, intent: e.target.value })}
-            className="px-3 py-1.5 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            value={trend}
+            onChange={(e) => { setTrend(e.target.value); setPage(1); }}
+            className="px-3 py-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-sm text-white"
           >
-            <option value="">All Intents</option>
-            <option value="informational">Informational</option>
-            <option value="commercial">Commercial</option>
-            <option value="transactional">Transactional</option>
-            <option value="navigational">Navigational</option>
+            <option value="">All Trends</option>
+            <option value="rising">Rising</option>
+            <option value="stable">Stable</option>
+            <option value="declining">Declining</option>
           </select>
-
+          <input
+            type="number"
+            value={minVolume}
+            onChange={(e) => { setMinVolume(e.target.value); setPage(1); }}
+            placeholder="Min volume"
+            className="w-28 px-3 py-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-sm text-white"
+          />
+          <input
+            type="number"
+            value={maxKD}
+            onChange={(e) => { setMaxKD(e.target.value); setPage(1); }}
+            placeholder="Max KD"
+            className="w-24 px-3 py-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-sm text-white"
+          />
           <select
-            value={filters.difficulty}
-            onChange={(e) => setFilters({ ...filters, difficulty: e.target.value })}
-            className="px-3 py-1.5 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            value={sortBy}
+            onChange={(e) => { setSortBy(e.target.value); setPage(1); }}
+            className="px-3 py-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-sm text-white"
           >
-            <option value="">All Difficulty</option>
-            <option value="easy">Easy (0-30)</option>
-            <option value="medium">Medium (30-60)</option>
-            <option value="hard">Hard (60+)</option>
+            <option value="volume">Sort: Volume</option>
+            <option value="kd">Sort: Difficulty</option>
+            <option value="keyword">Sort: Keyword</option>
+            <option value="updatedAt">Sort: Updated</option>
           </select>
-
-          {(filters.search || filters.websiteId || filters.intent || filters.difficulty) && (
+          {(q || country || trend || minVolume || maxKD) && (
             <button
-              onClick={() =>
-                setFilters({ search: '', websiteId: '', intent: '', difficulty: '', status: '' })
-              }
+              onClick={() => { setQ(''); setCountry(''); setTrend(''); setMinVolume(''); setMaxKD(''); setPage(1); }}
               className="text-sm text-emerald-400 hover:text-emerald-300"
             >
-              Clear filters
+              Clear
             </button>
           )}
         </div>
 
         {/* Bulk Actions */}
-        {selectedKeywords.length > 0 && (
-          <div className="flex items-center gap-4 mb-4 p-3 bg-zinc-900 border border-zinc-800 rounded-lg">
-            <span className="text-sm text-zinc-400">
-              {selectedKeywords.length} keywords selected
-            </span>
-            <button
-              onClick={handleDelete}
-              className="flex items-center gap-1 px-3 py-1.5 text-red-400 hover:text-red-300 text-sm"
-            >
-              <Trash2 className="h-4 w-4" />
-              Delete
-            </button>
-            <button
-              onClick={() => setShowClusterModal(true)}
-              className="flex items-center gap-1 px-3 py-1.5 text-purple-400 hover:text-purple-300 text-sm"
-            >
-              <FolderTree className="h-4 w-4" />
-              Cluster Selected
+        {selectedIds.length > 0 && (
+          <div className="flex items-center gap-4 p-3 bg-zinc-900 border border-zinc-800 rounded-lg">
+            <span className="text-sm text-zinc-400">{selectedIds.length} selected</span>
+            <button onClick={handleBulkDelete} className="flex items-center gap-1 px-3 py-1.5 text-red-400 hover:text-red-300 text-sm">
+              <Trash2 className="h-4 w-4" /> Delete
             </button>
           </div>
         )}
 
-        {/* Keywords Table */}
+        {/* Master Library Table */}
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
-          <table className="w-full">
+          <table className="w-full text-sm">
             <thead>
-              <tr className="bg-zinc-800/50 text-left text-sm text-zinc-400">
+              <tr className="bg-zinc-800/50 text-zinc-400 text-left text-xs uppercase tracking-wider">
                 <th className="px-4 py-3 w-10">
                   <input
                     type="checkbox"
-                    checked={selectedKeywords.length === keywords.length && keywords.length > 0}
-                    onChange={handleSelectAll}
+                    checked={selectedIds.length === masterKeywords.length && masterKeywords.length > 0}
+                    onChange={toggleSelectAll}
                     className="rounded border-zinc-600"
                   />
                 </th>
                 <th className="px-4 py-3">Keyword</th>
-                <th className="px-4 py-3 text-right">
-                  <button className="flex items-center gap-1 ml-auto">
-                    Volume <ArrowUpDown className="h-3 w-3" />
-                  </button>
-                </th>
-                <th className="px-4 py-3 text-right">Difficulty</th>
+                <th className="px-4 py-3">Country</th>
+                <th className="px-4 py-3 text-right">Volume</th>
+                <th className="px-4 py-3 text-right">KD</th>
                 <th className="px-4 py-3 text-right">CPC</th>
-                <th className="px-4 py-3">Intent</th>
-                <th className="px-4 py-3">Website</th>
-                <th className="px-4 py-3">Cluster</th>
-                <th className="px-4 py-3 text-right">Actions</th>
+                <th className="px-4 py-3">Trend</th>
+                <th className="px-4 py-3">Provider</th>
+                <th className="px-4 py-3 w-10" />
               </tr>
             </thead>
             <tbody>
               {isLoading ? (
                 <tr>
-                  <td colSpan={9} className="px-4 py-12 text-center text-zinc-400">
+                  <td colSpan={9} className="px-4 py-16 text-center text-zinc-500">
                     <RefreshCw className="h-6 w-6 animate-spin mx-auto mb-2" />
-                    Loading keywords...
+                    <p className="text-sm">Loading keywords...</p>
                   </td>
                 </tr>
-              ) : keywords.length === 0 ? (
+              ) : masterKeywords.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-4 py-12 text-center text-zinc-400">
-                    No keywords found. Start by running AI Research.
+                  <td colSpan={9} className="px-4 py-16 text-center text-zinc-500">
+                    <Database className="h-12 w-12 mx-auto mb-3 text-zinc-700" />
+                    <p className="text-lg font-medium">No keywords yet</p>
+                    <p className="text-sm mt-1 mb-4">Use AI Research to discover keywords for your niche</p>
+                    <button
+                      onClick={() => setShowResearchModal(true)}
+                      className="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-lg text-white text-sm"
+                    >
+                      Start AI Research
+                    </button>
                   </td>
                 </tr>
               ) : (
-                keywords.map((keyword) => (
-                  <tr key={keyword._id} className="border-t border-zinc-800 hover:bg-zinc-800/50">
+                masterKeywords.map((kw) => (
+                  <tr key={kw._id} className="border-t border-zinc-800/50 hover:bg-zinc-800/30 transition-colors">
                     <td className="px-4 py-3">
                       <input
                         type="checkbox"
-                        checked={selectedKeywords.includes(keyword._id)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedKeywords([...selectedKeywords, keyword._id]);
-                          } else {
-                            setSelectedKeywords(selectedKeywords.filter((id) => id !== keyword._id));
-                          }
-                        }}
+                        checked={selectedIds.includes(kw._id)}
+                        onChange={() => toggleSelect(kw._id)}
                         className="rounded border-zinc-600"
                       />
                     </td>
+                    <td className="px-4 py-3 font-medium">{kw.keyword}</td>
                     <td className="px-4 py-3">
-                      <div>
-                        <span className="font-medium">{keyword.keyword}</span>
-                        {keyword.topic && (
-                          <span className="text-xs text-zinc-500 ml-2">({keyword.topic})</span>
-                        )}
-                      </div>
+                      <span className="px-2 py-0.5 bg-zinc-800 rounded text-zinc-300 text-xs font-mono">{kw.country}</span>
                     </td>
-                    <td className="px-4 py-3 text-right font-mono">
-                      {formatNumber(keyword.volume)}
-                    </td>
+                    <td className="px-4 py-3 text-right font-mono">{kw.volume.toLocaleString()}</td>
                     <td className="px-4 py-3 text-right">
-                      <span
-                        className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${getDifficultyColor(
-                          keyword.difficulty
-                        )}`}
-                      >
-                        {keyword.difficulty}
+                      <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${KD_COLOR(kw.kd)}`}>
+                        {kw.kd}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-right font-mono">
-                      ${(keyword.cpc / 100).toFixed(2)}
-                    </td>
+                    <td className="px-4 py-3 text-right text-zinc-300">${kw.cpc.toFixed(2)}</td>
                     <td className="px-4 py-3">
-                      <span
-                        className={`inline-flex px-2 py-0.5 rounded text-xs font-medium capitalize ${getIntentColor(
-                          keyword.intent
-                        )}`}
-                      >
-                        {keyword.intent}
+                      <span className="flex items-center gap-1.5">
+                        {TREND_ICON[kw.trend]}
+                        <span className="text-xs text-zinc-400 capitalize">{kw.trend}</span>
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-sm text-zinc-400">
-                      {keyword.websiteId?.name || '-'}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-zinc-400">
-                      {keyword.clusterName || '-'}
+                    <td className="px-4 py-3">
+                      <span className="px-2 py-0.5 bg-zinc-800 rounded text-zinc-400 text-xs">{kw.provider}</span>
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <button className="p-1 text-zinc-400 hover:text-white rounded hover:bg-zinc-700">
-                        <MoreHorizontal className="h-4 w-4" />
+                      <button
+                        onClick={() => handleDelete(kw._id)}
+                        className="p-1.5 text-zinc-600 hover:text-red-400 hover:bg-red-900/20 rounded transition-colors"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
                       </button>
                     </td>
                   </tr>
@@ -535,24 +440,27 @@ export default function KeywordsPage() {
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-center gap-2 mt-6">
-            <button
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page === 1}
-              className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Previous
-            </button>
-            <span className="text-zinc-400">
-              Page {page} of {totalPages}
+          <div className="flex items-center justify-between text-sm text-zinc-400">
+            <span>
+              Showing {((page - 1) * 50) + 1}–{Math.min(page * 50, totalCount)} of {totalCount.toLocaleString()}
             </span>
-            <button
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={page === totalPages}
-              className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Next
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="px-3 py-1.5 bg-zinc-800 rounded-lg hover:bg-zinc-700 disabled:opacity-40"
+              >
+                Previous
+              </button>
+              <span className="px-3 py-1.5 bg-zinc-800 rounded-lg">{page} / {totalPages}</span>
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+                className="px-3 py-1.5 bg-zinc-800 rounded-lg hover:bg-zinc-700 disabled:opacity-40"
+              >
+                Next
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -561,24 +469,8 @@ export default function KeywordsPage() {
       {showResearchModal && (
         <KeywordResearchModal
           onClose={() => setShowResearchModal(false)}
-          onSuccess={() => {
-            setShowResearchModal(false);
-            fetchKeywords();
-          }}
+          onSuccess={() => { setShowResearchModal(false); fetchMaster(); }}
           websites={websites}
-        />
-      )}
-
-      {/* Cluster Modal */}
-      {showClusterModal && (
-        <ClusterModal
-          keywordIds={selectedKeywords}
-          onClose={() => setShowClusterModal(false)}
-          onSuccess={() => {
-            setShowClusterModal(false);
-            setSelectedKeywords([]);
-            fetchKeywords();
-          }}
         />
       )}
     </div>
@@ -587,14 +479,8 @@ export default function KeywordsPage() {
 
 // AI Research Modal
 function KeywordResearchModal({
-  onClose,
-  onSuccess,
-  websites,
-}: {
-  onClose: () => void;
-  onSuccess: () => void;
-  websites: Website[];
-}) {
+  onClose, onSuccess, websites,
+}: { onClose: () => void; onSuccess: () => void; websites: Website[] }) {
   const [seedKeyword, setSeedKeyword] = useState('');
   const [niche, setNiche] = useState('');
   const [websiteId, setWebsiteId] = useState('');
@@ -603,136 +489,82 @@ function KeywordResearchModal({
   const [autoSave, setAutoSave] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [results, setResults] = useState<Array<{
-    keyword: string;
-    volume: number;
-    difficulty: number;
-    cpc: number;
-    intent: string;
-    topic: string;
+    keyword: string; volume: number; difficulty: number; cpc: number; intent: string; topic: string;
   }> | null>(null);
 
   const handleResearch = async () => {
-    if (!seedKeyword && !niche) {
-      alert('Please enter a seed keyword or niche');
-      return;
-    }
-
+    if (!seedKeyword && !niche) { alert('Enter a seed keyword or niche'); return; }
     setIsLoading(true);
     setResults(null);
-
     try {
       const res = await fetch('/api/keywords/research', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          seedKeyword,
-          niche,
-          websiteId: websiteId || undefined,
-          count,
-          intent,
-          autoSave,
-        }),
+        body: JSON.stringify({ seedKeyword, niche, websiteId: websiteId || undefined, count, intent, autoSave }),
       });
-
       const data = await res.json();
       if (data.success) {
         setResults(data.data);
-        if (autoSave) {
-          onSuccess();
-        }
+        if (autoSave) onSuccess();
       } else {
         alert(data.error || 'Failed to generate keywords');
       }
-    } catch (error) {
-      console.error('Failed to generate keywords:', error);
-      alert('Failed to generate keywords');
-    } finally {
-      setIsLoading(false);
-    }
+    } catch { alert('Failed to generate keywords'); }
+    finally { setIsLoading(false); }
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
       <div className="relative w-full max-w-3xl max-h-[90vh] overflow-y-auto bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl m-4">
-        <div className="sticky top-0 flex items-center justify-between px-6 py-4 bg-zinc-900 border-b border-zinc-800">
+        <div className="sticky top-0 flex items-center justify-between px-6 py-4 bg-zinc-900 border-b border-zinc-800 z-10">
           <h2 className="text-xl font-semibold flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-emerald-400" />
             AI Keyword Research
           </h2>
-          <button onClick={onClose} className="text-zinc-400 hover:text-white">
-            &times;
-          </button>
+          <button onClick={onClose} className="text-zinc-400 hover:text-white text-xl">&times;</button>
         </div>
 
-        <div className="p-6 space-y-6">
+        <div className="p-6 space-y-5">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-zinc-400 mb-1">
-                Seed Keyword
-              </label>
+              <label className="block text-sm font-medium text-zinc-400 mb-1">Seed Keyword</label>
               <input
-                type="text"
-                value={seedKeyword}
-                onChange={(e) => setSeedKeyword(e.target.value)}
+                type="text" value={seedKeyword} onChange={(e) => setSeedKeyword(e.target.value)}
                 className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 placeholder="e.g., digital marketing"
               />
+              <p className="text-xs text-zinc-600 mt-1">The main topic to research</p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-zinc-400 mb-1">
-                Niche/Industry
-              </label>
+              <label className="block text-sm font-medium text-zinc-400 mb-1">Niche / Industry</label>
               <input
-                type="text"
-                value={niche}
-                onChange={(e) => setNiche(e.target.value)}
+                type="text" value={niche} onChange={(e) => setNiche(e.target.value)}
                 className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 placeholder="e.g., SaaS, E-commerce"
               />
+              <p className="text-xs text-zinc-600 mt-1">Helps AI find more relevant keywords</p>
             </div>
           </div>
 
           <div className="grid grid-cols-3 gap-4">
             <div>
-              <label className="block text-sm font-medium text-zinc-400 mb-1">
-                Assign to Website
-              </label>
-              <select
-                value={websiteId}
-                onChange={(e) => setWebsiteId(e.target.value)}
-                className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              >
+              <label className="block text-sm font-medium text-zinc-400 mb-1">Assign to Website</label>
+              <select value={websiteId} onChange={(e) => setWebsiteId(e.target.value)}
+                className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-white">
                 <option value="">Don&apos;t assign</option>
-                {websites.map((w) => (
-                  <option key={w._id} value={w._id}>
-                    {w.name}
-                  </option>
-                ))}
+                {websites.map((w) => <option key={w._id} value={w._id}>{w.name}</option>)}
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-zinc-400 mb-1">
-                Number of Keywords
-              </label>
-              <input
-                type="number"
-                value={count}
-                onChange={(e) => setCount(parseInt(e.target.value))}
-                min={10}
-                max={100}
-                className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              />
+              <label className="block text-sm font-medium text-zinc-400 mb-1">How Many</label>
+              <input type="number" value={count} onChange={(e) => setCount(parseInt(e.target.value))} min={10} max={100}
+                className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-white" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-zinc-400 mb-1">
-                Intent Filter
-              </label>
-              <select
-                value={intent}
-                onChange={(e) => setIntent(e.target.value)}
-                className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              >
+              <label className="block text-sm font-medium text-zinc-400 mb-1">Intent</label>
+              <select value={intent} onChange={(e) => setIntent(e.target.value)}
+                className="w-full px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-white">
                 <option value="all">All Intents</option>
                 <option value="informational">Informational</option>
                 <option value="commercial">Commercial</option>
@@ -742,41 +574,18 @@ function KeywordResearchModal({
           </div>
 
           <div className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              id="autoSave"
-              checked={autoSave}
-              onChange={(e) => setAutoSave(e.target.checked)}
-              className="rounded border-zinc-600"
-            />
-            <label htmlFor="autoSave" className="text-sm text-zinc-400">
-              Automatically save keywords to database
-            </label>
+            <input type="checkbox" id="autoSave" checked={autoSave} onChange={(e) => setAutoSave(e.target.checked)} className="rounded border-zinc-600" />
+            <label htmlFor="autoSave" className="text-sm text-zinc-400">Auto-save keywords to library</label>
           </div>
 
-          <button
-            onClick={handleResearch}
-            disabled={isLoading || (!seedKeyword && !niche)}
-            className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg disabled:opacity-50"
-          >
-            {isLoading ? (
-              <>
-                <RefreshCw className="h-5 w-5 animate-spin" />
-                Generating Keywords...
-              </>
-            ) : (
-              <>
-                <Sparkles className="h-5 w-5" />
-                Generate Keywords
-              </>
-            )}
+          <button onClick={handleResearch} disabled={isLoading || (!seedKeyword && !niche)}
+            className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg disabled:opacity-50">
+            {isLoading ? <><RefreshCw className="h-5 w-5 animate-spin" /> Generating...</> : <><Sparkles className="h-5 w-5" /> Generate Keywords</>}
           </button>
 
           {results && (
-            <div className="mt-6">
-              <h3 className="text-lg font-medium mb-3">
-                Generated {results.length} Keywords
-              </h3>
+            <div>
+              <h3 className="text-lg font-medium mb-3">Generated {results.length} Keywords</h3>
               <div className="max-h-64 overflow-y-auto bg-zinc-800 rounded-lg">
                 <table className="w-full text-sm">
                   <thead className="sticky top-0 bg-zinc-700">
@@ -799,144 +608,6 @@ function KeywordResearchModal({
                   </tbody>
                 </table>
               </div>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// Cluster Modal
-function ClusterModal({
-  keywordIds,
-  onClose,
-  onSuccess,
-}: {
-  keywordIds: string[];
-  onClose: () => void;
-  onSuccess: () => void;
-}) {
-  const [isLoading, setIsLoading] = useState(false);
-  const [autoUpdate, setAutoUpdate] = useState(true);
-  const [results, setResults] = useState<Array<{
-    clusterId: string;
-    clusterName: string;
-    keywords: string[];
-    parentKeyword: string;
-    intent: string;
-    contentSuggestion: string;
-  }> | null>(null);
-
-  const handleCluster = async () => {
-    setIsLoading(true);
-
-    try {
-      const res = await fetch('/api/keywords/cluster', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          keywordIds,
-          autoUpdate,
-        }),
-      });
-
-      const data = await res.json();
-      if (data.success) {
-        setResults(data.data);
-        if (autoUpdate) {
-          onSuccess();
-        }
-      } else {
-        alert(data.error || 'Failed to cluster keywords');
-      }
-    } catch (error) {
-      console.error('Failed to cluster keywords:', error);
-      alert('Failed to cluster keywords');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-3xl max-h-[90vh] overflow-y-auto bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl m-4">
-        <div className="sticky top-0 flex items-center justify-between px-6 py-4 bg-zinc-900 border-b border-zinc-800">
-          <h2 className="text-xl font-semibold flex items-center gap-2">
-            <FolderTree className="h-5 w-5 text-purple-400" />
-            Cluster Keywords
-          </h2>
-          <button onClick={onClose} className="text-zinc-400 hover:text-white">
-            &times;
-          </button>
-        </div>
-
-        <div className="p-6 space-y-6">
-          <p className="text-zinc-400">
-            Clustering {keywordIds.length} selected keywords into topic groups using AI.
-          </p>
-
-          <div className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              id="autoUpdate"
-              checked={autoUpdate}
-              onChange={(e) => setAutoUpdate(e.target.checked)}
-              className="rounded border-zinc-600"
-            />
-            <label htmlFor="autoUpdate" className="text-sm text-zinc-400">
-              Automatically update keywords with cluster assignments
-            </label>
-          </div>
-
-          <button
-            onClick={handleCluster}
-            disabled={isLoading}
-            className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg disabled:opacity-50"
-          >
-            {isLoading ? (
-              <>
-                <RefreshCw className="h-5 w-5 animate-spin" />
-                Clustering Keywords...
-              </>
-            ) : (
-              <>
-                <FolderTree className="h-5 w-5" />
-                Start Clustering
-              </>
-            )}
-          </button>
-
-          {results && (
-            <div className="mt-6 space-y-4">
-              <h3 className="text-lg font-medium">
-                Created {results.length} Clusters
-              </h3>
-              {results.map((cluster, i) => (
-                <div key={i} className="bg-zinc-800 rounded-lg p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <h4 className="font-medium text-emerald-400">{cluster.clusterName}</h4>
-                    <span className="text-xs text-zinc-500 capitalize">{cluster.intent}</span>
-                  </div>
-                  <p className="text-sm text-zinc-400 mb-2">
-                    Primary: <span className="text-white">{cluster.parentKeyword}</span>
-                  </p>
-                  <p className="text-xs text-zinc-500 mb-2">
-                    Content: {cluster.contentSuggestion}
-                  </p>
-                  <div className="flex flex-wrap gap-1">
-                    {cluster.keywords.map((kw, j) => (
-                      <span
-                        key={j}
-                        className="px-2 py-0.5 bg-zinc-700 rounded text-xs text-zinc-300"
-                      >
-                        {kw}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              ))}
             </div>
           )}
         </div>

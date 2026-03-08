@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/db';
-import { BuilderProject, BuilderPage, BuilderComponent } from '@/models';
-import { generateFullSite } from '@/lib/ai/site-generator';
+import { BuilderProject, BuilderPage, BuilderComponent, Website } from '@/models';
+import { generateFullSite, SeoContext } from '@/lib/ai/site-generator';
 import mongoose from 'mongoose';
 
 // Allow up to 10 minutes for site generation
@@ -43,6 +43,32 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       );
     }
 
+    // Build SEO context from project settings + linked Website
+    let seoContext: SeoContext | undefined;
+    const seoConfig = project.settings?.seoConfig;
+
+    if (seoConfig) {
+      seoContext = {
+        niche: seoConfig.niche,
+        country: seoConfig.country,
+        region: seoConfig.region,
+        language: seoConfig.language,
+        targetKeywords: seoConfig.targetKeywords,
+        schemaType: seoConfig.schemaType,
+      };
+    }
+
+    // Also pull niche/country from the linked Website if not set in project
+    if (project.websiteId) {
+      const website = await Website.findById(project.websiteId).select('niche country language').lean();
+      if (website) {
+        if (!seoContext) seoContext = {};
+        if (!seoContext.niche && website.niche) seoContext.niche = website.niche;
+        if (!seoContext.country && website.country) seoContext.country = website.country;
+        if (!seoContext.language && website.language) seoContext.language = website.language;
+      }
+    }
+
     // Generate the full site FIRST (before deleting anything)
     const result = await generateFullSite({
       userPrompt: prompt.trim(),
@@ -50,6 +76,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       primaryColor: project.settings?.primaryColor || '#10b981',
       secondaryColor: project.settings?.secondaryColor || '#06b6d4',
       fontFamily: project.settings?.fontFamily || 'Inter',
+      seoContext,
     });
 
     // Only delete existing data AFTER successful generation
@@ -88,6 +115,8 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
         language: project.settings?.defaultLanguage || 'en',
         code: pageDef.code,
         aiPrompt: pageDef.description,
+        metaTitle: pageDef.metaTitle,
+        metaDescription: pageDef.metaDescription,
         status: pageDef.isValid ? 'generated' : 'draft',
         order: i,
       });

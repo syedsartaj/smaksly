@@ -39,6 +39,8 @@ export interface SitePlan {
     isHomePage: boolean;
     sections: string[];
     description: string;
+    metaTitle?: string;
+    metaDescription?: string;
   }>;
   components: Array<{
     name: string;
@@ -46,6 +48,15 @@ export interface SitePlan {
     navLinks?: Array<{ label: string; path: string }>;
   }>;
   blogEnabled: boolean;
+}
+
+export interface SeoContext {
+  niche?: string;
+  country?: string;
+  region?: string;
+  language?: string;
+  targetKeywords?: string[];
+  schemaType?: string;
 }
 
 export interface GeneratedComponent {
@@ -67,6 +78,8 @@ export interface GeneratedPage {
   errors: string[];
   sections: string[];
   description: string;
+  metaTitle?: string;
+  metaDescription?: string;
 }
 
 export interface SiteGenerationResult {
@@ -87,9 +100,10 @@ export async function generateFullSite(params: {
   primaryColor: string;
   secondaryColor: string;
   fontFamily: string;
+  seoContext?: SeoContext;
   onProgress?: ProgressCallback;
 }): Promise<SiteGenerationResult> {
-  const { userPrompt, siteName, primaryColor, secondaryColor, fontFamily, onProgress } = params;
+  const { userPrompt, siteName, primaryColor, secondaryColor, fontFamily, seoContext, onProgress } = params;
   const errors: string[] = [];
   let totalTokens = 0;
 
@@ -103,6 +117,7 @@ export async function generateFullSite(params: {
     siteName,
     primaryColor,
     secondaryColor,
+    seoContext,
   });
 
   totalTokens += plan.tokensUsed;
@@ -187,6 +202,11 @@ export async function generateFullSite(params: {
         sections: pageDef.sections,
         description: pageDef.description,
         allPages: allPageInfo,
+        seoContext: seoContext ? {
+          ...seoContext,
+          metaTitle: pageDef.metaTitle,
+          metaDescription: pageDef.metaDescription,
+        } : undefined,
       });
     }
 
@@ -203,6 +223,8 @@ export async function generateFullSite(params: {
       errors: result.errors,
       sections: pageDef.sections,
       description: pageDef.description,
+      metaTitle: pageDef.metaTitle,
+      metaDescription: pageDef.metaDescription,
     });
   }
 
@@ -232,6 +254,7 @@ async function generateSitePlan(params: {
   siteName: string;
   primaryColor: string;
   secondaryColor: string;
+  seoContext?: SeoContext;
 }): Promise<{ data: SitePlan; tokensUsed: number }> {
   const response = await withRetry(async () => {
     const client = getAnthropic();
@@ -240,7 +263,7 @@ async function generateSitePlan(params: {
       max_tokens: 4000,
       system: [{ type: 'text', text: SITE_PLAN_SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
       messages: [
-        { role: 'user', content: createSitePlanPrompt(params) },
+        { role: 'user', content: createSitePlanPrompt({ ...params, seoContext: params.seoContext }) },
       ],
     });
   });
