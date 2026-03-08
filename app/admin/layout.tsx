@@ -16,6 +16,7 @@ import {
   Layout,
   Wand2,
   BookOpen,
+  Mail,
 } from 'lucide-react';
 
 const navigation = [
@@ -55,6 +56,11 @@ const navigation = [
     name: 'Templates',
     href: '/admin/templates',
     icon: Layout,
+  },
+  {
+    name: 'Email',
+    href: '/admin/email',
+    icon: Mail,
   },
   {
     name: 'AI Blog Writer',

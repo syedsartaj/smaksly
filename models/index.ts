@@ -81,3 +81,10 @@ export type { IAIFixReport, IFixIssue, FixIssueSeverity, FixIssueCategory } from
 // SEO Platform — Uptime Monitoring
 export { UptimeLog } from './UptimeLog';
 export type { IUptimeLog, UptimeStatus } from './UptimeLog';
+
+// Email Management
+export { EmailAccount } from './EmailAccount';
+export type { IEmailAccount, EmailAccountStatus } from './EmailAccount';
+
+export { Email } from './Email';
+export type { IEmail, IEmailContact, EmailDirection, EmailFolder } from './Email';

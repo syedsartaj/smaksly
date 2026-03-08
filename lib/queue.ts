@@ -19,6 +19,7 @@ export const QUEUE_NAMES = {
   KEYWORD_HISTORY_SYNC: 'keyword-history-sync',
   WEBSITE_FIXER: 'website-fixer',
   UPTIME_PING: 'uptime-ping',
+  EMAIL_SYNC: 'email-sync',
 } as const;
 
 // Job types
@@ -176,6 +177,10 @@ export const addJob = {
     const queue = getQueue<typeof data>(QUEUE_NAMES.DEPLOY);
     return queue.add('deploy', data, options);
   },
+  emailSync: async (data: { accountId?: string }, options?: { delay?: number; priority?: number }) => {
+    const queue = getQueue<typeof data>(QUEUE_NAMES.EMAIL_SYNC);
+    return queue.add('sync', data, options);
+  },
 };
 
 // Scheduled/Repeatable jobs
@@ -252,6 +257,17 @@ export const scheduleRecurringJobs = async () => {
     }
   );
 
+  // Email sync every 5 minutes
+  const emailSyncQueue = getQueue<{ accountId?: string }>(QUEUE_NAMES.EMAIL_SYNC);
+  await emailSyncQueue.add(
+    'sync-all',
+    {},
+    {
+      repeat: {
+        pattern: '*/5 * * * *', // Every 5 minutes
+      },
+    }
+  );
 };
 
 // Get queue events for monitoring
