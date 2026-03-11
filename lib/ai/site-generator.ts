@@ -492,7 +492,7 @@ async function generatePageCode(
 
     const response = await client.messages.create({
       model: CLAUDE_SONNET,
-      max_tokens: 6000,
+      max_tokens: 8000,
       system: [{ type: 'text', text: PAGE_SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
       messages: [
         { role: 'user', content: prompt },
@@ -502,6 +502,11 @@ async function generatePageCode(
     const rawText = response.content?.[0]?.type === 'text' ? response.content[0].text : '';
     const tokensUsed = (response.usage?.input_tokens || 0) + (response.usage?.output_tokens || 0);
     if (!rawText) throw new Error(`Empty response from AI for page: ${pageName}`);
+
+    // Warn if truncated (AI hit max_tokens)
+    if (response.stop_reason === 'max_tokens') {
+      console.warn(`Page "${pageName}" was truncated (hit max_tokens). Output may be incomplete.`);
+    }
 
     const sanitized = processGeneratedCode(rawText);
 

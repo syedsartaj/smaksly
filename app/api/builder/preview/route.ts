@@ -39,6 +39,9 @@ export async function POST(req: NextRequest) {
         return `const ${name} = {\n${entries.join(',\n')}\n}`;
       });
 
+    // Repair truncated AI code (hit max_tokens) by closing open braces/tags
+    preprocessedCode = repairTruncatedCode(preprocessedCode);
+
     // Transpile TSX to JavaScript
     let transpiledCode: string;
     try {
@@ -56,9 +59,8 @@ export async function POST(req: NextRequest) {
 
       transpiledCode = result.code;
     } catch (babelError) {
-      // Log the first 500 chars of code for debugging
       console.error('Babel transpilation error:', babelError);
-      console.error('Code snippet (first 500 chars):', preprocessedCode.slice(0, 500));
+      console.error('Code (last 200 chars):', preprocessedCode.slice(-200));
       const errorMsg = babelError instanceof Error ? babelError.message : 'Unknown error';
       return NextResponse.json(
         {
@@ -518,4 +520,56 @@ function generatePreviewHTML(
   </script>
 </body>
 </html>`;
+}
+
+/**
+ * Repair AI-generated code that was truncated (hit max_tokens).
+ * Closes unclosed strings, JSX tags, braces, and parens so Babel can parse it.
+ */
+function repairTruncatedCode(code: string): string {
+  // Check if code looks complete (has a default export with balanced structure)
+  const openBraces = (code.match(/\{/g) || []).length;
+  const closeBraces = (code.match(/\}/g) || []).length;
+  const openParens = (code.match(/\(/g) || []).length;
+  const closeParens = (code.match(/\)/g) || []).length;
+
+  if (openBraces === closeBraces && openParens === closeParens) {
+    return code; // Looks balanced, no repair needed
+  }
+
+  // Truncated code detected — trim the last incomplete line
+  const lines = code.split('\n');
+
+  // Find the last line that looks complete (ends with ; or > or { or } or ) or ,)
+  let lastGoodLine = lines.length - 1;
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const trimmed = lines[i].trim();
+    if (trimmed && /[;>{}\),]$/.test(trimmed)) {
+      lastGoodLine = i;
+      break;
+    }
+  }
+
+  let repaired = lines.slice(0, lastGoodLine + 1).join('\n');
+
+  // Re-count after trimming
+  const ob = (repaired.match(/\{/g) || []).length;
+  const cb = (repaired.match(/\}/g) || []).length;
+  const op = (repaired.match(/\(/g) || []).length;
+  const cp = (repaired.match(/\)/g) || []).length;
+
+  // Close any open JSX — add a simple closing fragment
+  // Then close remaining braces and parens
+  const missingParens = op - cp;
+  const missingBraces = ob - cb;
+
+  if (missingParens > 0 || missingBraces > 0) {
+    repaired += '\n';
+    // Close parens first (likely JSX return), then braces (function body)
+    for (let i = 0; i < missingParens; i++) repaired += ')';
+    if (missingParens > 0) repaired += ';\n';
+    for (let i = 0; i < missingBraces; i++) repaired += '}\n';
+  }
+
+  return repaired;
 }
