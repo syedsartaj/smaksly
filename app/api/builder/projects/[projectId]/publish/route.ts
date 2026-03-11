@@ -152,6 +152,8 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     // Initialize git
     const git = simpleGit(projectPath);
     await git.init();
+    await git.addConfig('user.email', 'builder@smaksly.com');
+    await git.addConfig('user.name', 'Smaksly Builder');
     await git.add('.');
 
     const message =

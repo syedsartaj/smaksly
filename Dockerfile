@@ -55,6 +55,10 @@ RUN chown nextjs:nodejs .next
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
+# Copy full node_modules for runtime dependencies not traced by standalone
+# (Babel for preview transpilation, simple-git/tmp for publish route)
+COPY --from=deps --chown=nextjs:nodejs /app/node_modules ./node_modules
+
 # Switch to non-root user
 USER nextjs
 
