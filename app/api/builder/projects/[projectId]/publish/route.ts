@@ -390,6 +390,11 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   }
 }
 
+// Escape single quotes for use in generated JS/TS string literals
+function esc(str: string | undefined | null): string {
+  return (str || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+
 async function generateProjectFiles(
   projectPath: string,
   project: InstanceType<typeof BuilderProject>,
@@ -543,8 +548,8 @@ body {
   // Generate component imports and usage
   const componentImports: string[] = [];
   // Pass siteName and other settings as props to Header and Footer
-  const headerJsx = headerComponent ? `<Header siteName="${siteName}" />` : '';
-  const footerJsx = footerComponent ? `<Footer siteName="${siteName}" />` : '';
+  const headerJsx = headerComponent ? `<Header siteName="${siteName.replace(/"/g, '&quot;')}" />` : '';
+  const footerJsx = footerComponent ? `<Footer siteName="${siteName.replace(/"/g, '&quot;')}" />` : '';
 
   if (headerComponent) {
     componentImports.push(`import _Header from '@/components/${headerComponent.name}';\nconst Header = _Header as any;`);
@@ -568,10 +573,10 @@ body {
   // Build metadata object pieces
   const metadataLines: string[] = [];
   metadataLines.push(`  title: {`);
-  metadataLines.push(`    default: '${siteName}',`);
-  metadataLines.push(`    template: '%s | ${siteName}',`);
+  metadataLines.push(`    default: '${esc(siteName)}',`);
+  metadataLines.push(`    template: '%s | ${esc(siteName)}',`);
   metadataLines.push(`  },`);
-  metadataLines.push(`  description: '${siteDescription}',`);
+  metadataLines.push(`  description: '${esc(siteDescription)}',`);
 
   if (faviconUrl) {
     metadataLines.push(`  icons: {`);
@@ -585,9 +590,9 @@ body {
 
   // OpenGraph
   const ogLines: string[] = [];
-  ogLines.push(`    title: '${siteName}',`);
-  ogLines.push(`    description: '${siteDescription}',`);
-  ogLines.push(`    siteName: '${siteName}',`);
+  ogLines.push(`    title: '${esc(siteName)}',`);
+  ogLines.push(`    description: '${esc(siteDescription)}',`);
+  ogLines.push(`    siteName: '${esc(siteName)}',`);
   if (ogImage) {
     ogLines.push(`    images: ['${ogImage}'],`);
   }
@@ -598,8 +603,8 @@ body {
   // Twitter
   const twLines: string[] = [];
   twLines.push(`    card: '${twitterCard}',`);
-  twLines.push(`    title: '${siteName}',`);
-  twLines.push(`    description: '${siteDescription}',`);
+  twLines.push(`    title: '${esc(siteName)}',`);
+  twLines.push(`    description: '${esc(siteDescription)}',`);
   if (twitterHandle) {
     twLines.push(`    creator: '${twitterHandle}',`);
   }
@@ -716,8 +721,8 @@ export default function RootLayout({
 
       // Build per-page metadata lines
       const metaLines: string[] = [];
-      if (page.metaTitle) metaLines.push(`  title: '${page.metaTitle}',`);
-      if (page.metaDescription) metaLines.push(`  description: '${page.metaDescription}',`);
+      if (page.metaTitle) metaLines.push(`  title: '${esc(page.metaTitle as string)}',`);
+      if (page.metaDescription) metaLines.push(`  description: '${esc(page.metaDescription as string)}',`);
       if (page.ogImage) metaLines.push(`  openGraph: { images: ['${page.ogImage}'] },`);
       const metaBlock = metaLines.length > 0
         ? `\nexport const metadata: Metadata = {\n${metaLines.join('\n')}\n};\n`
@@ -868,8 +873,8 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
 
       if (isClientComponent) {
         const pageMetaLines: string[] = [];
-        if (page.metaTitle) pageMetaLines.push(`  title: '${page.metaTitle}',`);
-        if (page.metaDescription) pageMetaLines.push(`  description: '${page.metaDescription}',`);
+        if (page.metaTitle) pageMetaLines.push(`  title: '${esc(page.metaTitle as string)}',`);
+        if (page.metaDescription) pageMetaLines.push(`  description: '${esc(page.metaDescription as string)}',`);
         if (page.ogImage) {
           pageMetaLines.push(`  openGraph: { images: ['${page.ogImage}'] },`);
         }
@@ -877,8 +882,8 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
         await fs.writeFile(path.join(dirPath, 'layout.tsx'), pageLayoutCode);
       } else {
         const pageMetaLines: string[] = [];
-        if (page.metaTitle) pageMetaLines.push(`  title: '${page.metaTitle}',`);
-        if (page.metaDescription) pageMetaLines.push(`  description: '${page.metaDescription}',`);
+        if (page.metaTitle) pageMetaLines.push(`  title: '${esc(page.metaTitle as string)}',`);
+        if (page.metaDescription) pageMetaLines.push(`  description: '${esc(page.metaDescription as string)}',`);
         if (page.ogImage) {
           pageMetaLines.push(`  openGraph: { images: ['${page.ogImage}'] },`);
         }
