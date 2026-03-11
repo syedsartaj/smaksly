@@ -1,14 +1,15 @@
 /**
- * Full-Site Generator using Claude Opus 4.6
- * Option B: Orchestrated multi-call approach
+ * Full-Site Generator using Claude AI
+ * Cost-optimized: Haiku for planning, Sonnet for code generation
+ * Header+Footer combined into single call, reduced max_tokens
  *
  * Flow:
- * 1. Generate site plan (pages, sections, design system)
- * 2. Generate Header + Footer components (sequential)
- * 3. Generate each page sequentially with delays
+ * 1. Generate site plan with Haiku (cheap, just JSON)
+ * 2. Generate Header + Footer in a single Sonnet call
+ * 3. Generate each page sequentially with Sonnet
  */
 
-import { getAnthropic, CLAUDE_SONNET } from './claude-client';
+import { getAnthropic, CLAUDE_SONNET, CLAUDE_HAIKU } from './claude-client';
 import {
   SITE_PLAN_SYSTEM_PROMPT,
   createSitePlanPrompt,
@@ -109,7 +110,7 @@ export async function generateFullSite(params: {
 
   const progress = onProgress || (() => {});
 
-  // ── STEP 1: Generate Site Plan ──
+  // ── STEP 1: Generate Site Plan (Haiku — cheap, just JSON) ──
   progress('planning', 'Creating site plan...', 5);
 
   const plan = await generateSitePlan({
@@ -123,8 +124,8 @@ export async function generateFullSite(params: {
   totalTokens += plan.tokensUsed;
   progress('planning', `Site plan ready: ${plan.data.pages.length} pages`, 15);
 
-  // ── STEP 2: Generate Header & Footer ──
-  progress('components', 'Generating Header...', 20);
+  // ── STEP 2: Generate Header & Footer in ONE call ──
+  progress('components', 'Generating Header & Footer...', 20);
 
   const headerDef = plan.data.components.find((c) => c.name === 'Header');
   const footerDef = plan.data.components.find((c) => c.name === 'Footer');
@@ -141,30 +142,32 @@ export async function generateFullSite(params: {
     colorScheme: plan.data.designSystem.colorScheme,
   };
 
-  // Generate header and footer sequentially to avoid rate limits
-  const headerResult = await generateComponent(
-    createHeaderPrompt({
-      ...designCtx,
-      description: headerDef?.description || 'Modern sticky header with navigation',
-      navLinks,
-    }),
-    'Header'
-  );
-  totalTokens += headerResult.tokensUsed;
-  progress('components', 'Header ready, generating Footer...', 25);
+  const headerPrompt = createHeaderPrompt({
+    ...designCtx,
+    description: headerDef?.description || 'Modern sticky header with navigation',
+    navLinks,
+  });
+  const footerPrompt = createFooterPrompt({
+    ...designCtx,
+    description: footerDef?.description || 'Professional footer with links and contact info',
+    navLinks,
+  });
 
-  await new Promise((r) => setTimeout(r, 2000));
-
-  const footerResult = await generateComponent(
-    createFooterPrompt({
-      ...designCtx,
-      description: footerDef?.description || 'Professional footer with links and contact info',
-      navLinks,
-    }),
-    'Footer'
-  );
-  totalTokens += footerResult.tokensUsed;
-  const components: GeneratedComponent[] = [headerResult.component, footerResult.component];
+  let components: GeneratedComponent[];
+  try {
+    const headerFooterResult = await generateHeaderAndFooter(headerPrompt, footerPrompt);
+    totalTokens += headerFooterResult.tokensUsed;
+    components = [headerFooterResult.header, headerFooterResult.footer];
+  } catch (err) {
+    // Fallback: generate separately if combined call fails to split
+    console.log('Combined Header+Footer failed, generating separately...');
+    const headerResult = await generateComponent(headerPrompt, 'Header');
+    totalTokens += headerResult.tokensUsed;
+    await new Promise((r) => setTimeout(r, 1000));
+    const footerResult = await generateComponent(footerPrompt, 'Footer');
+    totalTokens += footerResult.tokensUsed;
+    components = [headerResult.component, footerResult.component];
+  }
 
   progress('components', 'Header & Footer ready', 35);
 
@@ -179,7 +182,7 @@ export async function generateFullSite(params: {
     progress('pages', `Generating ${pageDef.name} (${i + 1}/${totalPages})...`, Math.round(progressPct));
 
     // Small delay between pages (skip for first page)
-    if (i > 0) await new Promise((r) => setTimeout(r, 2000));
+    if (i > 0) await new Promise((r) => setTimeout(r, 1000));
 
     let prompt: string;
 
@@ -249,6 +252,7 @@ export async function generateFullSite(params: {
 
 // ─── Step Implementations ───
 
+// Site plan uses Haiku — it's just JSON generation, no code needed
 async function generateSitePlan(params: {
   userPrompt: string;
   siteName: string;
@@ -259,8 +263,8 @@ async function generateSitePlan(params: {
   const response = await withRetry(async () => {
     const client = getAnthropic();
     return client.messages.create({
-      model: CLAUDE_SONNET,
-      max_tokens: 4000,
+      model: CLAUDE_HAIKU,
+      max_tokens: 2000,
       system: [{ type: 'text', text: SITE_PLAN_SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
       messages: [
         { role: 'user', content: createSitePlanPrompt({ ...params, seoContext: params.seoContext }) },
@@ -280,6 +284,12 @@ async function generateSitePlan(params: {
 
   try {
     const plan = JSON.parse(jsonStr) as SitePlan;
+
+    // Truncate meta fields to fit DB constraints
+    for (const page of plan.pages || []) {
+      if (page.metaTitle && page.metaTitle.length > 70) page.metaTitle = page.metaTitle.slice(0, 70);
+      if (page.metaDescription && page.metaDescription.length > 160) page.metaDescription = page.metaDescription.slice(0, 160);
+    }
 
     // Validate and fix plan
     if (!plan.pages || plan.pages.length === 0) {
@@ -332,7 +342,7 @@ async function generateSitePlan(params: {
 }
 
 // Retry helper for rate limits — respects retry-after header timing
-async function withRetry<T>(fn: () => Promise<T>, retries = 4): Promise<T> {
+async function withRetry<T>(fn: () => Promise<T>, retries = 3): Promise<T> {
   for (let i = 0; i < retries; i++) {
     try {
       return await fn();
@@ -354,6 +364,7 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 4): Promise<T> {
   throw new Error('Unreachable');
 }
 
+// Fallback: generate a single component (used if combined call fails)
 async function generateComponent(
   prompt: string,
   name: string
@@ -363,7 +374,7 @@ async function generateComponent(
 
     const response = await client.messages.create({
       model: CLAUDE_SONNET,
-      max_tokens: 8000,
+      max_tokens: 3000,
       system: [{ type: 'text', text: COMPONENT_SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
       messages: [
         { role: 'user', content: prompt },
@@ -389,6 +400,83 @@ async function generateComponent(
   });
 }
 
+// Generate Header + Footer in a SINGLE API call (saves one Sonnet call)
+async function generateHeaderAndFooter(
+  headerPrompt: string,
+  footerPrompt: string
+): Promise<{ header: GeneratedComponent; footer: GeneratedComponent; tokensUsed: number }> {
+  return withRetry(async () => {
+    const client = getAnthropic();
+
+    const combinedPrompt = `Generate TWO components. Separate them with the exact line: ---COMPONENT_SEPARATOR---
+
+COMPONENT 1 — HEADER:
+${headerPrompt}
+
+---
+
+COMPONENT 2 — FOOTER:
+${footerPrompt}
+
+Output the Header code first, then the separator line "---COMPONENT_SEPARATOR---", then the Footer code. No markdown fences, no explanation.`;
+
+    const response = await client.messages.create({
+      model: CLAUDE_SONNET,
+      max_tokens: 6000,
+      system: [{ type: 'text', text: COMPONENT_SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
+      messages: [
+        { role: 'user', content: combinedPrompt },
+      ],
+    });
+
+    const rawText = response.content?.[0]?.type === 'text' ? response.content[0].text : '';
+    const tokensUsed = (response.usage?.input_tokens || 0) + (response.usage?.output_tokens || 0);
+    if (!rawText) throw new Error('Empty response from AI for Header & Footer');
+
+    // Split on separator — try multiple patterns the AI might use
+    let parts = rawText.split(/---COMPONENT_SEPARATOR---/);
+    if (parts.length < 2) {
+      parts = rawText.split(/---\s*COMPONENT[\s_]SEPARATOR\s*---/i);
+    }
+    if (parts.length < 2) {
+      // Fallback: split on "Footer" component declaration
+      const footerMatch = rawText.match(/([\s\S]*?)(\n(?:'use client';\s*\n)?(?:import[\s\S]*?\n)*export\s+default\s+function\s+Footer)/);
+      if (footerMatch) {
+        parts = [footerMatch[1], footerMatch[2] + rawText.slice(footerMatch[0].length)];
+      }
+    }
+    const headerCode = parts[0]?.trim() || '';
+    const footerCode = parts.length >= 2 ? parts[1]?.trim() : '';
+
+    const headerSanitized = processGeneratedCode(headerCode);
+    const footerSanitized = footerCode ? processGeneratedCode(footerCode) : null;
+
+    // If footer extraction failed, the entire response was likely just the header
+    if (!footerSanitized || !footerSanitized.isValid || !footerCode) {
+      // Return header only — footer will be generated in the fallback below
+      throw new Error('FOOTER_SPLIT_FAILED');
+    }
+
+    return {
+      header: {
+        name: 'Header',
+        code: headerSanitized.code,
+        isValid: headerSanitized.isValid,
+        warnings: headerSanitized.warnings,
+        errors: headerSanitized.errors,
+      },
+      footer: {
+        name: 'Footer',
+        code: footerSanitized.code,
+        isValid: footerSanitized.isValid,
+        warnings: footerSanitized.warnings,
+        errors: footerSanitized.errors,
+      },
+      tokensUsed,
+    };
+  });
+}
+
 async function generatePageCode(
   prompt: string,
   pageName: string
@@ -404,7 +492,7 @@ async function generatePageCode(
 
     const response = await client.messages.create({
       model: CLAUDE_SONNET,
-      max_tokens: 8000,
+      max_tokens: 6000,
       system: [{ type: 'text', text: PAGE_SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
       messages: [
         { role: 'user', content: prompt },

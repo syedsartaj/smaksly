@@ -51,13 +51,13 @@ const DANGEROUS_PATTERNS: { pattern: RegExp; replacement: string; reason: string
     reason: 'Direct cookie manipulation is dangerous',
   },
   {
-    pattern: /localStorage\./gi,
-    replacement: '/* localStorage. */ void 0.',
+    pattern: /\blocalStorage\s*\.\s*(getItem|setItem|removeItem|clear|key|length)/gi,
+    replacement: '/* localStorage removed */ void 0 /* .$1 */',
     reason: 'Direct localStorage access should be controlled',
   },
   {
-    pattern: /sessionStorage\./gi,
-    replacement: '/* sessionStorage. */ void 0.',
+    pattern: /\bsessionStorage\s*\.\s*(getItem|setItem|removeItem|clear|key|length)/gi,
+    replacement: '/* sessionStorage removed */ void 0 /* .$1 */',
     reason: 'Direct sessionStorage access should be controlled',
   },
 ];

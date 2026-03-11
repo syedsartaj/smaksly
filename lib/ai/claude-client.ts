@@ -14,4 +14,5 @@ export function getAnthropic(): Anthropic {
 
 export const CLAUDE_MODEL = 'claude-opus-4-6';
 export const CLAUDE_SONNET = 'claude-sonnet-4-6';
+export const CLAUDE_HAIKU = 'claude-haiku-4-5-20251001';
 export const MAX_TOKENS = 16000;

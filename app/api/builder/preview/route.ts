@@ -190,7 +190,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Generate preview HTML
-    const previewHtml = generatePreviewHTML(transpiledCode, blogData, singleBlog, projectSettings, language, direction, headerJs, footerJs, extractedIcons);
+    const previewHtml = generatePreviewHTML(transpiledCode, blogData, singleBlog, projectSettings, language, direction, headerJs, footerJs, extractedIcons, pageType);
 
     return NextResponse.json({
       success: true,
@@ -235,7 +235,8 @@ function generatePreviewHTML(
   direction?: string,
   headerJs?: string,
   footerJs?: string,
-  extractedIcons?: Set<string>
+  extractedIcons?: Set<string>,
+  pageType?: string
 ): string {
   // Remove import statements as they won't work in browser
   const cleanedCode = jsCode
@@ -243,8 +244,13 @@ function generatePreviewHTML(
     .replace(/import\s+['"][^'"]+['"];?\n?/g, '')
     .replace(/export\s+default\s+/g, 'const Page = ')
     .replace(/export\s+/g, 'const ')
-    // Remove hardcoded blogs array to use injected data from database
-    .replace(/const\s+blogs\s*=\s*\[[\s\S]*?\];\s*/g, '// blogs injected from database\n');
+    // Only remove hardcoded blogs array for blog pages where we inject real data
+    .replace(
+      pageType === 'blog-listing' || pageType === 'blog-post'
+        ? /const\s+blogs\s*=\s*\[[\s\S]*?\];\s*/g
+        : /(?!)/,  // never match for non-blog pages
+      '// blogs injected from database\n'
+    );
 
   const settings = {
     primaryColor: projectSettings?.primaryColor || '#10b981',

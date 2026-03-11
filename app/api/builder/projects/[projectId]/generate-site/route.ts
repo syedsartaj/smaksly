@@ -106,6 +106,9 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     const savedPages = [];
     for (let i = 0; i < result.pages.length; i++) {
       const pageDef = result.pages[i];
+      // Truncate AI-generated meta fields to fit Mongoose validation limits
+      const metaTitle = pageDef.metaTitle ? pageDef.metaTitle.slice(0, 70) : undefined;
+      const metaDescription = pageDef.metaDescription ? pageDef.metaDescription.slice(0, 160) : undefined;
       const page = await BuilderPage.create({
         projectId: new mongoose.Types.ObjectId(projectId),
         name: pageDef.name,
@@ -115,8 +118,8 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
         language: project.settings?.defaultLanguage || 'en',
         code: pageDef.code,
         aiPrompt: pageDef.description,
-        metaTitle: pageDef.metaTitle,
-        metaDescription: pageDef.metaDescription,
+        metaTitle,
+        metaDescription,
         status: pageDef.isValid ? 'generated' : 'draft',
         order: i,
       });

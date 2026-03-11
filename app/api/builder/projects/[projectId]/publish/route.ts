@@ -135,12 +135,19 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       );
     }
 
+    // Compute repoName early so we can predict the deployment URL for sitemap/robots
+    let repoName = project.gitRepoName;
+    if (!project.gitRepoUrl) {
+      repoName = `smaksly-${project._id.toString().slice(-8)}`;
+    }
+    const predictedDeployUrl = project.deploymentUrl || `https://${repoName}.vercel.app`;
+
     // Create temp directory
     tmpDir = await dir({ unsafeCleanup: true });
     const projectPath = tmpDir.path;
 
-    // Generate project files
-    await generateProjectFiles(projectPath, project, pages, components, website);
+    // Generate project files (pass predicted URL so sitemap works on first deploy)
+    await generateProjectFiles(projectPath, project, pages, components, website, predictedDeployUrl);
 
     // Initialize git
     const git = simpleGit(projectPath);
@@ -153,11 +160,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     await git.commit(message);
 
     // Create or update GitHub repo
-    let repoName = project.gitRepoName;
-
     if (!project.gitRepoUrl) {
-      // Create new repo
-      repoName = `smaksly-${project._id.toString().slice(-8)}`;
 
       const createRepoResponse = await fetch('https://api.github.com/user/repos', {
         method: 'POST',
@@ -272,7 +275,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 
     // Set Vercel environment variables (needed for blog API calls at build time)
     if (vercelProjectId && VERCEL_TOKEN) {
-      const siteUrl = project.deploymentUrl || `https://${repoName}.vercel.app`;
+      const siteUrl = predictedDeployUrl;
       const envVars = [
         { key: 'NEXT_PUBLIC_SMAKSLY_API', value: process.env.NEXT_PUBLIC_SITE_URL || 'https://smakaly-334466283114.me-central1.run.app', target: ['production', 'preview', 'development'], type: 'plain' },
         { key: 'NEXT_PUBLIC_PROJECT_ID', value: project._id.toString(), target: ['production', 'preview', 'development'], type: 'plain' },
@@ -382,7 +385,8 @@ async function generateProjectFiles(
   project: InstanceType<typeof BuilderProject>,
   pages: Array<Record<string, unknown>>,
   components: Array<Record<string, unknown>>,
-  website: Record<string, unknown> | null
+  website: Record<string, unknown> | null,
+  predictedDeployUrl?: string
 ) {
   // Create directory structure
   await fs.mkdir(path.join(projectPath, 'app'), { recursive: true });
@@ -549,7 +553,7 @@ body {
   const themeColor = seoMetadata.themeColor || '';
   const siteDescription = settings.siteDescription || '';
   const defaultLanguage = settings.defaultLanguage || seoConfig.language || 'en';
-  const deploymentUrl = project.deploymentUrl || seoConfig.canonicalBase || '';
+  const deploymentUrl = predictedDeployUrl || project.deploymentUrl || seoConfig.canonicalBase || '';
 
   // Build metadata object pieces
   const metadataLines: string[] = [];
@@ -566,9 +570,8 @@ body {
     metadataLines.push(`  },`);
   }
 
-  if (deploymentUrl) {
-    metadataLines.push(`  metadataBase: new URL('${deploymentUrl}'),`);
-  }
+  // Use env var at runtime so custom domains work without re-publishing
+  metadataLines.push(`  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || '${deploymentUrl || 'https://localhost:3000'}'),`);
 
   // OpenGraph
   const ogLines: string[] = [];
@@ -721,7 +724,7 @@ const BlogListingClient = _BlogListingClient as any;
 export const revalidate = 60;
 ${metaBlock}
 export default async function BlogListingPage({ params }: { params: { lang: string } }) {
-  const { blogs } = await getBlogs(1, 12);
+  const { blogs } = await getBlogs(1, 100);
   return <BlogListingClient blogs={blogs} blogBasePath={\`/\${params.lang}/blog\`} />;
 }
 `;
@@ -734,7 +737,7 @@ const BlogListingClient = _BlogListingClient as any;
 export const revalidate = 60;
 ${metaBlock}
 export default async function BlogListingPage() {
-  const { blogs } = await getBlogs(1, 12);
+  const { blogs } = await getBlogs(1, 100);
   return <BlogListingClient blogs={blogs} />;
 }
 `;
@@ -769,9 +772,13 @@ export default async function BlogListingPage() {
         );
       }
 
-      // 3. Ensure there's a null guard for blog._id access
-      if (clientCode.includes('blog._id') && !clientCode.includes('!blog ||') && !clientCode.includes('!blog||')) {
-        clientCode = clientCode.replace(/if\s*\(\s*!blog\._id\s*\)/g, 'if (!blog || !blog._id)');
+      // 3. Ensure there's a null guard for blog property access
+      if (!clientCode.includes('!blog ||') && !clientCode.includes('!blog||') && !clientCode.includes('!blog)')) {
+        // Add null guard at the top of the component body if blog is accessed without checks
+        clientCode = clientCode.replace(
+          /(export\s+default\s+function\s+\w+\s*\([^)]*\)\s*\{)/,
+          '$1\n  if (!blog) return <div className="text-center py-20"><p>Post not found</p></div>;'
+        );
       }
       await fs.writeFile(path.join(dirPath, 'BlogPostClient.tsx'), clientCode);
 
@@ -1226,7 +1233,7 @@ NEXT_PUBLIC_PROJECT_ID=${project._id}
 
   // Generate .env with actual values (NEXT_PUBLIC_ vars are safe to commit - needed at build time)
   const smakslyApi = process.env.NEXT_PUBLIC_SITE_URL || 'https://smakaly-334466283114.me-central1.run.app';
-  const siteDeployUrl = project.deploymentUrl || '';
+  const siteDeployUrl = predictedDeployUrl || project.deploymentUrl || '';
   const envFile = `NEXT_PUBLIC_SMAKSLY_API=${smakslyApi}
 NEXT_PUBLIC_PROJECT_ID=${project._id}
 NEXT_PUBLIC_SITE_URL=${siteDeployUrl}
