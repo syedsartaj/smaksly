@@ -180,12 +180,20 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 
       if (!createRepoResponse.ok) {
         const errorData = await createRepoResponse.json();
+        console.error('GitHub repo creation error:', createRepoResponse.status, JSON.stringify(errorData));
         // Check if repo already exists
-        if (errorData.message?.includes('already exists')) {
+        if (
+          errorData.message?.includes('already exists') ||
+          errorData.errors?.some((e: { message?: string }) => e.message?.includes('already exists'))
+        ) {
           // Use existing repo
           console.log('Repository already exists, using existing');
+        } else if (createRepoResponse.status === 422 && errorData.message === 'Repository creation failed.') {
+          // GitHub returns 422 with generic message — repo may exist under a different case or org
+          // Try to use the repo anyway
+          console.log('Repository creation returned 422, attempting to use existing repo');
         } else {
-          throw new Error(`Failed to create GitHub repo: ${errorData.message}`);
+          throw new Error(`Failed to create GitHub repo (${createRepoResponse.status}): ${errorData.message}${errorData.errors ? ' - ' + JSON.stringify(errorData.errors) : ''}`);
         }
       }
 
