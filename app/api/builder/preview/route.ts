@@ -274,6 +274,11 @@ function generatePreviewHTML(
     .replace(/import\s+['"][^'"]+['"];?\n?/g, '')
     .replace(/export\s+default\s+/g, 'const Page = ')
     .replace(/export\s+/g, 'const ')
+    // Remove Header/Footer usage from page code (they're rendered by the preview wrapper)
+    .replace(/<Header\s*\/?\s*>/g, '{/* Header */}')
+    .replace(/<\/Header>/g, '')
+    .replace(/<Footer\s*\/?\s*>/g, '{/* Footer */}')
+    .replace(/<\/Footer>/g, '')
     // Only remove hardcoded blogs array for blog pages where we inject real data
     .replace(
       pageType === 'blog-listing' || pageType === 'blog-post'
@@ -491,8 +496,8 @@ function generatePreviewHTML(
 
     try {
       // Layout components (wrapped in IIFE to avoid variable name collisions)
-      ${headerJs ? `var Header = (function() { ${headerJs}; return typeof Header !== 'undefined' ? Header : null; })();` : '// No header component'}
-      ${footerJs ? `var Footer = (function() { ${footerJs}; return typeof Footer !== 'undefined' ? Footer : null; })();` : '// No footer component'}
+      ${headerJs ? `var Header = (function() { ${headerJs}; return typeof Header !== 'undefined' ? Header : null; })();` : 'var Header = function() { return null; };'}
+      ${footerJs ? `var Footer = (function() { ${footerJs}; return typeof Footer !== 'undefined' ? Footer : null; })();` : 'var Footer = function() { return null; };'}
 
       // Page component (wrapped in IIFE to isolate scope)
       var Page = (function() { ${cleanedCode}; return typeof Page !== 'undefined' ? Page : null; })();
@@ -524,10 +529,9 @@ function generatePreviewHTML(
 
 /**
  * Repair AI-generated code that was truncated (hit max_tokens).
- * Closes unclosed strings, JSX tags, braces, and parens so Babel can parse it.
+ * Finds the last complete closing tag and rebuilds from there.
  */
 function repairTruncatedCode(code: string): string {
-  // Check if code looks complete (has a default export with balanced structure)
   const openBraces = (code.match(/\{/g) || []).length;
   const closeBraces = (code.match(/\}/g) || []).length;
   const openParens = (code.match(/\(/g) || []).length;
@@ -537,39 +541,63 @@ function repairTruncatedCode(code: string): string {
     return code; // Looks balanced, no repair needed
   }
 
-  // Truncated code detected — trim the last incomplete line
+  // Truncated — find the last line that ends with a complete closing tag or statement
   const lines = code.split('\n');
 
-  // Find the last line that looks complete (ends with ; or > or { or } or ) or ,)
-  let lastGoodLine = lines.length - 1;
-  for (let i = lines.length - 1; i >= 0; i--) {
+  // Walk backwards to find the last line ending with a proper closing tag like </div>, </section>, etc.
+  let cutLine = lines.length - 1;
+  for (let i = lines.length - 1; i >= Math.max(0, lines.length - 30); i--) {
     const trimmed = lines[i].trim();
-    if (trimmed && /[;>{}\),]$/.test(trimmed)) {
-      lastGoodLine = i;
+    if (trimmed && /<\/\w+>$/.test(trimmed)) {
+      cutLine = i;
       break;
     }
   }
 
-  let repaired = lines.slice(0, lastGoodLine + 1).join('\n');
+  let repaired = lines.slice(0, cutLine + 1).join('\n');
 
-  // Re-count after trimming
+  // Count remaining imbalances after cut
   const ob = (repaired.match(/\{/g) || []).length;
   const cb = (repaired.match(/\}/g) || []).length;
   const op = (repaired.match(/\(/g) || []).length;
   const cp = (repaired.match(/\)/g) || []).length;
 
-  // Close any open JSX — add a simple closing fragment
-  // Then close remaining braces and parens
-  const missingParens = op - cp;
-  const missingBraces = ob - cb;
+  // Build closing sequence: close open JSX divs, then parens, then braces
+  let closing = '\n';
 
-  if (missingParens > 0 || missingBraces > 0) {
-    repaired += '\n';
-    // Close parens first (likely JSX return), then braces (function body)
-    for (let i = 0; i < missingParens; i++) repaired += ')';
-    if (missingParens > 0) repaired += ';\n';
-    for (let i = 0; i < missingBraces; i++) repaired += '}\n';
+  // Track unclosed JSX tags by scanning for open/close tags
+  const openTags: string[] = [];
+  const tagOpenRegex = /<([A-Za-z][A-Za-z0-9.]*)[^>]*(?<!\/)>/g;
+  const tagCloseRegex = /<\/([A-Za-z][A-Za-z0-9.]*)>/g;
+  const selfClosingRegex = /<[A-Za-z][A-Za-z0-9.]*[^>]*\/>/g;
+
+  // Remove self-closing tags and strings/comments for counting
+  const forCounting = repaired
+    .replace(selfClosingRegex, '')
+    .replace(/\{\/\*[\s\S]*?\*\/\}/g, '')
+    .replace(/'[^']*'/g, '""')
+    .replace(/"[^"]*"/g, '""')
+    .replace(/`[^`]*`/g, '""');
+
+  let m;
+  while ((m = tagOpenRegex.exec(forCounting)) !== null) openTags.push(m[1]);
+  while ((m = tagCloseRegex.exec(forCounting)) !== null) {
+    const idx = openTags.lastIndexOf(m[1]);
+    if (idx !== -1) openTags.splice(idx, 1);
   }
 
-  return repaired;
+  // Close unclosed tags in reverse order
+  for (let i = openTags.length - 1; i >= 0; i--) {
+    closing += `</${openTags[i]}>\n`;
+  }
+
+  // Close remaining parens and braces
+  const missingParens = op - cp - (closing.match(/\)/g) || []).length;
+  const missingBraces = ob - cb - (closing.match(/\}/g) || []).length;
+
+  for (let i = 0; i < Math.max(0, missingParens); i++) closing += ')';
+  if (missingParens > 0) closing += ';\n';
+  for (let i = 0; i < Math.max(0, missingBraces); i++) closing += '}\n';
+
+  return repaired + closing;
 }
