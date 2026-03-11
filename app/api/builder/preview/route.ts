@@ -17,11 +17,27 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Pre-process: only fix patterns that Babel's preset-typescript can't handle.
-    // Keep it minimal to avoid corrupting string content.
+    // Pre-process: fix patterns that Babel's preset-typescript can't handle.
     let preprocessedCode = code
+      // Remove markdown code fences the AI sometimes leaves in
+      .replace(/^```(?:tsx?|jsx?|typescript|javascript)?\s*\n?/gm, '')
+      .replace(/^```\s*$/gm, '')
       // Fix malformed type annotations like "any BlogPost[]" -> "any[]"
-      .replace(/:\s*any\s+\w+\[\]/g, ': any[]');
+      .replace(/:\s*any\s+\w+\[\]/g, ': any[]')
+      // Fix "as const" assertions that can trip up older Babel configs
+      .replace(/\]\s+as\s+const/g, '] as any')
+      // Fix satisfies keyword (TS 4.9+, not supported by Babel preset-typescript)
+      .replace(/\bsatisfies\s+\w+/g, '')
+      // Remove "use server" directives (not valid in client preview)
+      .replace(/['"]use server['"]\s*;?\s*\n?/g, '')
+      // Convert const enums to plain objects (Babel can't handle enums in isolatedModules mode)
+      .replace(/(?:export\s+)?(?:const\s+)?enum\s+(\w+)\s*\{([^}]*)\}/g, (_, name, body) => {
+        const entries = body.split(',').filter((e: string) => e.trim()).map((e: string) => {
+          const [key, val] = e.split('=').map((s: string) => s.trim());
+          return `  ${key}: ${val || `'${key}'`}`;
+        });
+        return `const ${name} = {\n${entries.join(',\n')}\n}`;
+      });
 
     // Transpile TSX to JavaScript
     let transpiledCode: string;
@@ -40,12 +56,14 @@ export async function POST(req: NextRequest) {
 
       transpiledCode = result.code;
     } catch (babelError) {
+      // Log the first 500 chars of code for debugging
       console.error('Babel transpilation error:', babelError);
+      console.error('Code snippet (first 500 chars):', preprocessedCode.slice(0, 500));
+      const errorMsg = babelError instanceof Error ? babelError.message : 'Unknown error';
       return NextResponse.json(
         {
           success: false,
-          error: 'Code transpilation failed',
-          details: babelError instanceof Error ? babelError.message : 'Unknown error',
+          error: `Code transpilation failed: ${errorMsg}`,
         },
         { status: 400 }
       );
@@ -139,7 +157,17 @@ export async function POST(req: NextRequest) {
         const transpileComponent = (code: string, varName: string): string => {
           try {
             let preprocessed = code
-              .replace(/:\s*any\s+\w+\[\]/g, ': any[]');
+              .replace(/^```(?:tsx?|jsx?|typescript|javascript)?\s*\n?/gm, '')
+              .replace(/^```\s*$/gm, '')
+              .replace(/:\s*any\s+\w+\[\]/g, ': any[]')
+              .replace(/\bsatisfies\s+\w+/g, '')
+              .replace(/(?:export\s+)?(?:const\s+)?enum\s+(\w+)\s*\{([^}]*)\}/g, (_, name, body) => {
+                const entries = body.split(',').filter((e: string) => e.trim()).map((e: string) => {
+                  const [key, val] = e.split('=').map((s: string) => s.trim());
+                  return `  ${key}: ${val || `'${key}'`}`;
+                });
+                return `const ${name} = {\n${entries.join(',\n')}\n}`;
+              });
 
             const result = babel.transformSync(preprocessed, {
               presets: [
