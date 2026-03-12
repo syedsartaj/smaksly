@@ -684,8 +684,16 @@ export default function RootLayout({
 
   // Helper to write a page file with optional per-page metadata
   async function writePageFile(page: Record<string, unknown>, targetDir: string) {
-    const pagePath = page.path as string;
+    let pagePath = page.path as string;
     const pageType = page.type as string;
+
+    // Normalize blog paths: blog listing must be at /blog, blog post at /blog/[slug]
+    if (pageType === 'blog-listing' && pagePath !== '/blog') {
+      pagePath = '/blog';
+    }
+    if (pageType === 'blog-post' && !pagePath.startsWith('/blog/')) {
+      pagePath = '/blog/[slug]';
+    }
     let filePath: string;
     let dirPath: string;
 
