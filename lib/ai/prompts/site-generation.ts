@@ -56,7 +56,7 @@ Rules:
 - Each page MUST have metaTitle and metaDescription optimized for SEO
 - metaTitle and metaDescription MUST NOT contain special characters like single quotes ('), double quotes ("), or apostrophes — use plain text only
 - If target keywords are provided, weave them naturally into page descriptions and meta tags
-- If a niche/industry is provided, tailor sections to that industry's best practices
+- If a niche/industry is provided, tailor sections to that industry's best practices`;
 
 export function createSitePlanPrompt(params: {
   userPrompt: string;
@@ -123,7 +123,7 @@ CRITICAL RULES:
 12. DO NOT use localStorage or sessionStorage directly
 13. All string content must use plain straight quotes — no curly quotes or apostrophes
 14. Keep components under 200 lines — be concise
-15. NEVER nest <a> inside <Link> — Link renders its own anchor tag
+15. NEVER nest <a> inside <Link> — Link renders its own anchor tag`;
 
 export function createHeaderPrompt(params: {
   description: string;
@@ -244,7 +244,7 @@ CODE QUALITY RULES (MUST FOLLOW):
 - DO NOT use next/image layout prop — use fill or width/height
 - All string content MUST use plain text — no curly quotes, no apostrophes (use straight quotes only)
 - Ensure all JSX tags are properly closed — never leave tags unclosed
-- Keep each section focused and concise — avoid repeating similar content across sections
+- Keep each section focused and concise — avoid repeating similar content across sections`;
 
 export function createPagePrompt(params: {
   pageName: string;
