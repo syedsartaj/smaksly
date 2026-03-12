@@ -62,7 +62,7 @@ export default function SearchConsolePage() {
 
       if (data.success) {
         await fetch(`/api/websites/${website._id}`, {
-          method: 'PATCH',
+          method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ gscConnected: true }),
         });

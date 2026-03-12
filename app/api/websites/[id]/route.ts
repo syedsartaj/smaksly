@@ -174,6 +174,9 @@ export async function PUT(
   }
 }
 
+// PATCH - Alias for PUT (partial update)
+export { PUT as PATCH };
+
 // DELETE - Delete single website
 export async function DELETE(
   req: NextRequest,
