@@ -15,6 +15,11 @@ export interface IEmailAccount extends Document {
   passwordEncrypted: string; // AES-256-GCM encrypted
   passwordIv: string;
   passwordTag: string;
+  // Separate SMTP credentials (optional — if different from IMAP)
+  smtpUsername?: string;
+  smtpPasswordEncrypted?: string;
+  smtpPasswordIv?: string;
+  smtpPasswordTag?: string;
   lastSyncAt: Date | null;
   status: EmailAccountStatus;
   errorMessage?: string;
@@ -35,6 +40,10 @@ const EmailAccountSchema = new Schema<IEmailAccount>(
     passwordEncrypted: { type: String, required: true },
     passwordIv: { type: String, required: true },
     passwordTag: { type: String, required: true },
+    smtpUsername: { type: String },
+    smtpPasswordEncrypted: { type: String },
+    smtpPasswordIv: { type: String },
+    smtpPasswordTag: { type: String },
     lastSyncAt: { type: Date, default: null },
     status: { type: String, enum: ['active', 'error', 'disabled'], default: 'active' },
     errorMessage: { type: String },

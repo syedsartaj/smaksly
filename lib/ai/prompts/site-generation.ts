@@ -47,14 +47,16 @@ The JSON schema:
 Rules:
 - Always include Home page with path "/"
 - Always include Header and Footer components
-- If user mentions blog, include blog-listing (path: /blogs) and blog-post (path: /blog/[slug]) pages and set blogEnabled: true
+- If user mentions blog, include blog-listing (path: /blog) and blog-post (path: /blog/[slug]) pages and set blogEnabled: true
+- IMPORTANT: Blog listing path MUST be "/blog" (not "/blogs"). Blog post path MUST be "/blog/[slug]". These paths are non-negotiable.
 - Keep pages between 3-7 for a typical site
-- Each page should have 3-6 sections
+- Each page should have 3-6 sections (keep sections concise to avoid token overflow)
 - Infer reasonable pages from context (e.g. "restaurant" → Home, Menu, About, Contact, Blog)
-- navLinks in Header should match the pages list
+- navLinks in Header should match the pages list — use "/blog" for blog nav link (not "/blogs")
 - Each page MUST have metaTitle and metaDescription optimized for SEO
+- metaTitle and metaDescription MUST NOT contain special characters like single quotes ('), double quotes ("), or apostrophes — use plain text only
 - If target keywords are provided, weave them naturally into page descriptions and meta tags
-- If a niche/industry is provided, tailor sections to that industry's best practices`;
+- If a niche/industry is provided, tailor sections to that industry's best practices
 
 export function createSitePlanPrompt(params: {
   userPrompt: string;
@@ -116,7 +118,12 @@ CRITICAL RULES:
 7. Import icons from lucide-react only
 8. Mobile-first responsive design
 9. Component must have export default function ComponentName()
-10. Semantic HTML, accessibility (aria-labels), proper heading hierarchy`;
+10. Semantic HTML, accessibility (aria-labels), proper heading hierarchy
+11. DO NOT use TypeScript enums — use plain objects with "as const"
+12. DO NOT use localStorage or sessionStorage directly
+13. All string content must use plain straight quotes — no curly quotes or apostrophes
+14. Keep components under 200 lines — be concise
+15. NEVER nest <a> inside <Link> — Link renders its own anchor tag
 
 export function createHeaderPrompt(params: {
   description: string;
@@ -223,7 +230,21 @@ SEO RULES:
 - Use semantic HTML5 elements (<article>, <section>, <nav>, <aside>)
 - Add aria-labels on interactive elements
 - If target keywords are provided, use them naturally in headings and body text — never keyword-stuff
-- For local businesses, mention the city/region naturally in content`;
+- For local businesses, mention the city/region naturally in content
+
+CODE QUALITY RULES (MUST FOLLOW):
+- DO NOT use TypeScript enums — use plain objects with "as const" instead
+- DO NOT use "satisfies" keyword
+- DO NOT include "export type" or "export interface" at the top level — keep types/interfaces local
+- DO NOT use "use server" directive — pages are client-rendered
+- DO NOT hardcode large data arrays (more than 5 items) — keep content concise
+- DO NOT create overly long components — keep each page under 350 lines of code
+- DO NOT use localStorage, sessionStorage, or window directly — wrap in typeof checks if needed
+- DO NOT nest <a> tags inside <Link> components
+- DO NOT use next/image layout prop — use fill or width/height
+- All string content MUST use plain text — no curly quotes, no apostrophes (use straight quotes only)
+- Ensure all JSX tags are properly closed — never leave tags unclosed
+- Keep each section focused and concise — avoid repeating similar content across sections
 
 export function createPagePrompt(params: {
   pageName: string;
@@ -295,8 +316,11 @@ REQUIREMENTS:
 - Use secondary color (${params.secondaryColor}) for secondary elements
 - placeholder images: use "/placeholder.svg" with width/height props
 - Internal links should use <Link> to the correct page paths
+- Blog links MUST point to "/blog" (not "/blogs") — this is critical
 - Hero section (if present) should be visually impactful
 - Make it look professional and complete — not placeholder-y
+- Keep the component under 350 lines — be concise, avoid repetitive content
+- DO NOT hardcode large data arrays — keep sample data to 3-5 items max
 
 Generate the page component code now:`;
 }

@@ -880,6 +880,46 @@ function ComposeModal({
 
 // ─── Add Account Modal ───
 
+const EMAIL_PRESETS = {
+  zoho: {
+    label: 'Zoho Mail',
+    imapHost: 'imap.zoho.com', imapPort: '993',
+    smtpHost: 'smtp.zoho.com', smtpPort: '587',
+    separateSmtpAuth: false,
+    hint: 'Use your Zoho email as username. Requires Zoho Mail paid plan for IMAP access.',
+  },
+  'cloudflare-brevo': {
+    label: 'Cloudflare + Brevo',
+    imapHost: 'imap.gmail.com', imapPort: '993',
+    smtpHost: 'smtp-relay.brevo.com', smtpPort: '587',
+    separateSmtpAuth: true,
+    hint: 'IMAP: Use Gmail (where Cloudflare forwards). SMTP: Use Brevo SMTP key for sending.',
+  },
+  gmail: {
+    label: 'Gmail / Google Workspace',
+    imapHost: 'imap.gmail.com', imapPort: '993',
+    smtpHost: 'smtp.gmail.com', smtpPort: '587',
+    separateSmtpAuth: false,
+    hint: 'Use your Gmail address as username. Requires App Password if 2FA is enabled.',
+  },
+  outlook: {
+    label: 'Outlook / Microsoft 365',
+    imapHost: 'outlook.office365.com', imapPort: '993',
+    smtpHost: 'smtp.office365.com', smtpPort: '587',
+    separateSmtpAuth: false,
+    hint: 'Use your full email as username.',
+  },
+  custom: {
+    label: 'Custom Provider',
+    imapHost: '', imapPort: '993',
+    smtpHost: '', smtpPort: '587',
+    separateSmtpAuth: false,
+    hint: 'Enter your email provider IMAP/SMTP details manually.',
+  },
+} as const;
+
+type PresetKey = keyof typeof EMAIL_PRESETS;
+
 function AddAccountModal({
   onClose,
   onAdded,
@@ -887,18 +927,23 @@ function AddAccountModal({
   onClose: () => void;
   onAdded: () => void;
 }) {
+  const [preset, setPreset] = useState<PresetKey>('zoho');
+  const [separateSmtp, setSeparateSmtp] = useState(false);
   const [form, setForm] = useState({
     websiteId: '',
     email: '',
     displayName: '',
-    imapHost: '',
-    imapPort: '993',
-    smtpHost: '',
-    smtpPort: '587',
+    imapHost: EMAIL_PRESETS.zoho.imapHost,
+    imapPort: EMAIL_PRESETS.zoho.imapPort,
+    smtpHost: EMAIL_PRESETS.zoho.smtpHost,
+    smtpPort: EMAIL_PRESETS.zoho.smtpPort,
     username: '',
     password: '',
+    smtpUsername: '',
+    smtpPassword: '',
   });
   const [showPassword, setShowPassword] = useState(false);
+  const [showSmtpPassword, setShowSmtpPassword] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [websites, setWebsites] = useState<Array<{ _id: string; domain: string; name?: string }>>([]);
@@ -917,20 +962,42 @@ function AddAccountModal({
       .catch(() => {});
   }, []);
 
+  const applyPreset = (key: PresetKey) => {
+    const p = EMAIL_PRESETS[key];
+    setPreset(key);
+    setSeparateSmtp(p.separateSmtpAuth);
+    setForm((f) => ({
+      ...f,
+      imapHost: p.imapHost,
+      imapPort: p.imapPort,
+      smtpHost: p.smtpHost,
+      smtpPort: p.smtpPort,
+      smtpUsername: '',
+      smtpPassword: '',
+    }));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setSaving(true);
 
     try {
+      const payload: Record<string, unknown> = {
+        ...form,
+        imapPort: parseInt(form.imapPort, 10),
+        smtpPort: parseInt(form.smtpPort, 10),
+      };
+      // Only send separate SMTP creds if enabled and filled
+      if (!separateSmtp || !form.smtpUsername) {
+        delete payload.smtpUsername;
+        delete payload.smtpPassword;
+      }
+
       const res = await fetch('/api/emails/accounts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...form,
-          imapPort: parseInt(form.imapPort, 10),
-          smtpPort: parseInt(form.smtpPort, 10),
-        }),
+        body: JSON.stringify(payload),
       });
       const json = await res.json();
       if (json.success) {
@@ -948,6 +1015,8 @@ function AddAccountModal({
   const updateField = (field: string, value: string) => {
     setForm((f) => ({ ...f, [field]: value }));
   };
+
+  const currentPreset = EMAIL_PRESETS[preset];
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm">
@@ -969,6 +1038,28 @@ function AddAccountModal({
               {error}
             </div>
           )}
+
+          {/* Provider Preset */}
+          <div>
+            <label className="block text-xs text-zinc-500 mb-1.5">Email Provider</label>
+            <div className="grid grid-cols-3 gap-2">
+              {(Object.entries(EMAIL_PRESETS) as [PresetKey, typeof EMAIL_PRESETS[PresetKey]][]).map(([key, p]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => applyPreset(key)}
+                  className={`px-3 py-2 text-xs rounded-lg border transition-colors ${
+                    preset === key
+                      ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-400'
+                      : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:border-zinc-600 hover:text-zinc-300'
+                  }`}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+            <p className="text-[11px] text-zinc-600 mt-1.5">{currentPreset.hint}</p>
+          </div>
 
           {/* Website */}
           <div>
@@ -996,7 +1087,7 @@ function AddAccountModal({
                 type="email"
                 value={form.email}
                 onChange={(e) => updateField('email', e.target.value)}
-                placeholder="outreach@site.com"
+                placeholder="admin@yourdomain.com"
                 required
                 className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500"
               />
@@ -1007,7 +1098,7 @@ function AddAccountModal({
                 type="text"
                 value={form.displayName}
                 onChange={(e) => updateField('displayName', e.target.value)}
-                placeholder="Outreach Team"
+                placeholder="Admin"
                 className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500"
               />
             </div>
@@ -1071,18 +1162,20 @@ function AddAccountModal({
             </div>
           </div>
 
-          {/* Auth */}
+          {/* IMAP Auth */}
           <div>
             <div className="flex items-center gap-2 mb-2">
               <Lock className="h-3.5 w-3.5 text-zinc-500" />
-              <span className="text-xs font-medium text-zinc-400">Authentication</span>
+              <span className="text-xs font-medium text-zinc-400">
+                {separateSmtp ? 'IMAP Authentication' : 'Authentication'}
+              </span>
             </div>
             <div className="space-y-3">
               <input
                 type="text"
                 value={form.username}
                 onChange={(e) => updateField('username', e.target.value)}
-                placeholder="Username (usually the email address)"
+                placeholder={preset === 'cloudflare-brevo' ? 'Gmail address (where Cloudflare forwards)' : 'Username (usually the email address)'}
                 required
                 className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500"
               />
@@ -1091,7 +1184,7 @@ function AddAccountModal({
                   type={showPassword ? 'text' : 'password'}
                   value={form.password}
                   onChange={(e) => updateField('password', e.target.value)}
-                  placeholder="Password or App Password"
+                  placeholder={preset === 'cloudflare-brevo' ? 'Gmail App Password' : 'Password or App Password'}
                   required
                   className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 pr-10 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500"
                 />
@@ -1105,6 +1198,56 @@ function AddAccountModal({
               </div>
             </div>
           </div>
+
+          {/* Separate SMTP Auth Toggle */}
+          <div>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={separateSmtp}
+                onChange={(e) => setSeparateSmtp(e.target.checked)}
+                className="w-3.5 h-3.5 rounded border-zinc-600 bg-zinc-800 text-emerald-500 focus:ring-0 focus:ring-offset-0"
+              />
+              <span className="text-xs text-zinc-400">Use different credentials for SMTP (sending)</span>
+            </label>
+          </div>
+
+          {/* SMTP Auth (separate) */}
+          {separateSmtp && (
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <Lock className="h-3.5 w-3.5 text-zinc-500" />
+                <span className="text-xs font-medium text-zinc-400">SMTP Authentication</span>
+              </div>
+              <div className="space-y-3">
+                <input
+                  type="text"
+                  value={form.smtpUsername}
+                  onChange={(e) => updateField('smtpUsername', e.target.value)}
+                  placeholder={preset === 'cloudflare-brevo' ? 'Brevo account email' : 'SMTP username'}
+                  required
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500"
+                />
+                <div className="relative">
+                  <input
+                    type={showSmtpPassword ? 'text' : 'password'}
+                    value={form.smtpPassword}
+                    onChange={(e) => updateField('smtpPassword', e.target.value)}
+                    placeholder={preset === 'cloudflare-brevo' ? 'Brevo SMTP key' : 'SMTP password'}
+                    required
+                    className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 pr-10 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowSmtpPassword(!showSmtpPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300"
+                  >
+                    {showSmtpPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="flex justify-end gap-3 pt-2">
             <button

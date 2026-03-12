@@ -126,6 +126,9 @@ export default function BuilderProjectsPage() {
         setNewDomain('');
         fetchDomains(domainModal);
         fetchProjects();
+        // Auto-verify the newly added domain to get real DNS status
+        const addedDomain = newDomain.trim();
+        setTimeout(() => handleVerifyDomain(addedDomain), 500);
       } else {
         setDomainError(data.error || 'Failed to add domain');
       }
@@ -577,7 +580,7 @@ export default function BuilderProjectsPage() {
                         <div className="flex items-center gap-2 min-w-0">
                           <Link className="h-4 w-4 text-zinc-500 flex-shrink-0" />
                           <span className="text-sm text-white truncate">{d.name}</span>
-                          {d.verified !== false ? (
+                          {verifyResult[d.name]?.verified ? (
                             <span className="flex items-center gap-1 px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400 text-[10px] rounded-full flex-shrink-0">
                               <CheckCircle className="h-3 w-3" />
                               Verified
@@ -585,7 +588,7 @@ export default function BuilderProjectsPage() {
                           ) : (
                             <span className="flex items-center gap-1 px-1.5 py-0.5 bg-yellow-500/10 text-yellow-400 text-[10px] rounded-full flex-shrink-0">
                               <AlertTriangle className="h-3 w-3" />
-                              Pending
+                              {verifyResult[d.name] ? 'Not Configured' : 'Pending Verification'}
                             </span>
                           )}
                         </div>
@@ -630,8 +633,8 @@ export default function BuilderProjectsPage() {
                         </div>
                       )}
 
-                      {/* DNS Records for this domain */}
-                      {d.dnsRecords && d.dnsRecords.length > 0 && d.verified === false && (
+                      {/* DNS Records for this domain — always show so user knows what to configure */}
+                      {d.dnsRecords && d.dnsRecords.length > 0 && !verifyResult[d.name]?.verified && (
                         <div className="mt-2.5 p-2.5 bg-zinc-900 rounded border border-zinc-700/50">
                           <p className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1.5 font-medium">Required DNS Records</p>
                           <div className="space-y-1.5">

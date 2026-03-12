@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
     await connectDB();
 
     const body = await req.json();
-    const { websiteId, email, displayName, imapHost, imapPort, smtpHost, smtpPort, username, password } = body;
+    const { websiteId, email, displayName, imapHost, imapPort, smtpHost, smtpPort, username, password, smtpUsername, smtpPassword } = body;
 
     if (!websiteId || !email || !imapHost || !smtpHost || !username || !password) {
       return NextResponse.json(
@@ -83,12 +83,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Test SMTP connection before saving
+    // Test SMTP connection before saving (use separate SMTP creds if provided)
     const smtpTest = await testSmtpConnection({
       host: smtpHost,
       port: smtpPort || 587,
-      username,
-      password,
+      username: smtpUsername || username,
+      password: smtpPassword || password,
     });
 
     if (!smtpTest.success) {
@@ -98,8 +98,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Encrypt password
+    // Encrypt IMAP password
     const encrypted = encryptPassword(password);
+
+    // Encrypt SMTP password if separate credentials provided
+    const smtpEncrypted = smtpPassword ? encryptPassword(smtpPassword) : null;
 
     const account = await EmailAccount.create({
       websiteId: new mongoose.Types.ObjectId(websiteId),
@@ -113,6 +116,12 @@ export async function POST(req: NextRequest) {
       passwordEncrypted: encrypted.encrypted,
       passwordIv: encrypted.iv,
       passwordTag: encrypted.tag,
+      ...(smtpEncrypted && {
+        smtpUsername: smtpUsername,
+        smtpPasswordEncrypted: smtpEncrypted.encrypted,
+        smtpPasswordIv: smtpEncrypted.iv,
+        smtpPasswordTag: smtpEncrypted.tag,
+      }),
       status: 'active',
     });
 

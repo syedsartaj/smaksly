@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/db';
-import { BuilderProject, BuilderPage, BuilderComponent, BuilderAsset, Content } from '@/models';
+import { BuilderProject, BuilderPage, BuilderComponent, BuilderAsset, Content, Website, Domain, SEOMetric, AIFixReport, HealthReport, Issue, KeywordHistory, KeywordGroup, Keyword, UptimeLog, EmailAccount } from '@/models';
 import mongoose from 'mongoose';
 
 interface RouteParams {
@@ -213,13 +213,26 @@ export async function DELETE(req: NextRequest, { params }: RouteParams) {
       }
     }
 
-    // 3. Delete all blog content for this website
+    // 3. Delete all data scoped to this website
     const projectObjectId = new mongoose.Types.ObjectId(projectId);
-    let blogsDeleted = 0;
     if (project.websiteId) {
-      const result = await Content.deleteMany({ websiteId: project.websiteId });
-      blogsDeleted = result.deletedCount || 0;
-      cleanup.push(`${blogsDeleted} blog(s) deleted`);
+      const wid = project.websiteId;
+      const results = await Promise.all([
+        Content.deleteMany({ websiteId: wid }),
+        SEOMetric.deleteMany({ websiteId: wid }),
+        AIFixReport.deleteMany({ websiteId: wid }),
+        HealthReport.deleteMany({ websiteId: wid }),
+        Issue.deleteMany({ websiteId: wid }),
+        KeywordHistory.deleteMany({ websiteId: wid }),
+        KeywordGroup.deleteMany({ websiteId: wid }),
+        Keyword.deleteMany({ websiteId: wid }),
+        UptimeLog.deleteMany({ websiteId: wid }),
+        Domain.deleteMany({ websiteId: wid }),
+        EmailAccount.deleteMany({ websiteId: wid }),
+        Website.findByIdAndDelete(wid),
+      ]);
+      const totalDeleted = results.reduce((sum, r) => sum + ((r as any)?.deletedCount || (r ? 1 : 0)), 0);
+      cleanup.push(`Website and ${totalDeleted} related records deleted`);
     }
 
     // 4. Delete all builder data

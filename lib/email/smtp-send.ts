@@ -23,19 +23,19 @@ export async function sendEmail(params: SendEmailParams): Promise<{ success: boo
     return { success: false, error: 'Email account not found' };
   }
 
-  const password = decryptPassword(
-    account.passwordEncrypted,
-    account.passwordIv,
-    account.passwordTag
-  );
+  // Use separate SMTP credentials if provided, otherwise fall back to IMAP credentials
+  const smtpUser = account.smtpUsername || account.username;
+  const smtpPass = account.smtpPasswordEncrypted
+    ? decryptPassword(account.smtpPasswordEncrypted, account.smtpPasswordIv!, account.smtpPasswordTag!)
+    : decryptPassword(account.passwordEncrypted, account.passwordIv, account.passwordTag);
 
   const transporter = nodemailer.createTransport({
     host: account.smtpHost,
     port: account.smtpPort,
     secure: account.smtpPort === 465,
     auth: {
-      user: account.username,
-      pass: password,
+      user: smtpUser,
+      pass: smtpPass,
     },
   });
 
