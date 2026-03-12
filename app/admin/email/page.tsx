@@ -80,6 +80,7 @@ export default function EmailPage() {
   const [expandedWebsites, setExpandedWebsites] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState({ accounts: true, emails: false, thread: false, syncing: false });
+  const [syncCooldown, setSyncCooldown] = useState(0);
   const [showCompose, setShowCompose] = useState(false);
   const [showAddAccount, setShowAddAccount] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
@@ -150,8 +151,16 @@ export default function EmailPage() {
     }
   }, []);
 
-  // Sync emails
+  // Cooldown timer
+  useEffect(() => {
+    if (syncCooldown <= 0) return;
+    const timer = setTimeout(() => setSyncCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [syncCooldown]);
+
+  // Sync emails (60s cooldown)
   const handleSync = async () => {
+    if (syncCooldown > 0) return;
     try {
       setLoading((p) => ({ ...p, syncing: true }));
       const body = selectedAccount ? { accountId: selectedAccount._id } : {};
@@ -164,6 +173,7 @@ export default function EmailPage() {
         await fetchEmails(selectedAccount._id, currentPage, searchQuery);
       }
       await fetchAccounts();
+      setSyncCooldown(60);
     } catch (err) {
       console.error('Sync failed:', err);
     } finally {
@@ -258,11 +268,12 @@ export default function EmailPage() {
         <div className="flex items-center gap-2">
           <button
             onClick={handleSync}
-            disabled={loading.syncing}
+            disabled={loading.syncing || syncCooldown > 0}
             className="flex items-center gap-2 px-3 py-1.5 text-sm text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors disabled:opacity-50"
+            title={syncCooldown > 0 ? `Wait ${syncCooldown}s` : 'Sync emails'}
           >
             <RefreshCw className={`h-4 w-4 ${loading.syncing ? 'animate-spin' : ''}`} />
-            Sync
+            {syncCooldown > 0 ? `${syncCooldown}s` : 'Sync'}
           </button>
           <button
             onClick={() => setShowCompose(true)}
