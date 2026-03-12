@@ -141,10 +141,22 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       repoName = `smaksly-${project._id.toString().slice(-8)}`;
     }
     // Prefer custom domain from Website model over Vercel URL
-    const customDomainUrl = website?.customDomain && !website.customDomain.includes('.vercel.app')
-      ? (website.customDomain.startsWith('http') ? website.customDomain : `https://${website.customDomain}`)
+    // Check both website.customDomain and website.domain (domain route sets website.domain)
+    const rawCustomDomain =
+      (website?.customDomain && !website.customDomain.includes('.vercel.app') ? website.customDomain : null) ||
+      (website?.domain && !String(website.domain).includes('.vercel.app') && !String(website.domain).includes('.smaksly.') ? String(website.domain) : null);
+    const customDomainUrl = rawCustomDomain
+      ? (rawCustomDomain.startsWith('http') ? rawCustomDomain : `https://${rawCustomDomain}`)
       : null;
     const predictedDeployUrl = customDomainUrl || project.deploymentUrl || `https://${repoName}.vercel.app`;
+    console.log('[Publish] Domain resolution:', {
+      'website.domain': website?.domain,
+      'website.customDomain': website?.customDomain,
+      'project.deploymentUrl': project.deploymentUrl,
+      rawCustomDomain,
+      customDomainUrl,
+      predictedDeployUrl,
+    });
 
     // Create temp directory
     tmpDir = await dir({ unsafeCleanup: true });
@@ -243,7 +255,10 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
           // Project exists, get/update its ID
           const existingProject = await checkProjectResponse.json();
           vercelProjectId = existingProject.id;
-          deploymentUrl = `https://${existingProject.name}.vercel.app`;
+          // Only set deploymentUrl to Vercel URL if no custom domain is configured
+          if (!customDomainUrl) {
+            deploymentUrl = `https://${existingProject.name}.vercel.app`;
+          }
           console.log('Found existing Vercel project:', vercelProjectId);
         } else {
           // Project doesn't exist (or was deleted) — create it
@@ -346,7 +361,8 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     project.lastCommitMessage = message;
     project.status = 'published';
     project.vercelProjectId = vercelProjectId || undefined;
-    project.deploymentUrl = deploymentUrl || `https://${repoName}.vercel.app`;
+    // Preserve custom domain URL; only fall back to Vercel URL if no custom domain
+    project.deploymentUrl = customDomainUrl || deploymentUrl || `https://${repoName}.vercel.app`;
     await project.save();
 
     // Update the Website model with deployment info and mark as active
@@ -355,7 +371,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
         gitRepo: project.gitRepoUrl,
         vercelProjectName: repoName,
         status: 'active',
-        // Store deployment URL for easy access
+        // Store deployment URL for easy access (preserve custom domain)
         customDomain: project.deploymentUrl,
       });
     }
