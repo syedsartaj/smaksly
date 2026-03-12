@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/db';
-import { BuilderProject } from '@/models';
+import { BuilderProject, Website } from '@/models';
 import mongoose from 'mongoose';
 
 interface RouteParams {
@@ -133,6 +133,11 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       deploymentUrl: `https://${domain}`,
     });
 
+    // Update the Website record's domain to match the custom domain
+    if (project.websiteId) {
+      await Website.findByIdAndUpdate(project.websiteId, { domain });
+    }
+
     // Update NEXT_PUBLIC_SITE_URL env var on Vercel so sitemap/robots/metadata use the custom domain
     try {
       const envRes = await fetch(
@@ -245,6 +250,11 @@ export async function DELETE(req: NextRequest, { params }: RouteParams) {
     if (project.deploymentUrl === `https://${domain}`) {
       const vercelUrl = project.gitRepoName ? `https://${project.gitRepoName}.vercel.app` : '';
       await BuilderProject.findByIdAndUpdate(projectId, { deploymentUrl: vercelUrl });
+
+      // Revert Website domain back to Vercel subdomain
+      if (project.websiteId && project.gitRepoName) {
+        await Website.findByIdAndUpdate(project.websiteId, { domain: `${project.gitRepoName}.vercel.app` });
+      }
 
       // Update NEXT_PUBLIC_SITE_URL env var back to vercel.app URL
       if (vercelUrl) {
