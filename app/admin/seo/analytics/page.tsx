@@ -20,6 +20,16 @@ import {
   Hash,
   FileText,
   Globe,
+  CheckCircle2,
+  XCircle,
+  AlertCircle,
+  Loader2,
+  Send,
+  Map,
+  Clock,
+  Smartphone,
+  Link2,
+  Trash2,
 } from 'lucide-react';
 import {
   AreaChart,
@@ -70,6 +80,32 @@ interface PageData {
   impressions: number;
   ctr: number;
   position: number;
+}
+
+interface SitemapData {
+  path: string;
+  lastSubmitted: string | null;
+  isPending: boolean;
+  warnings: string | null;
+  errors: string | null;
+  contents: Array<{
+    type: string;
+    submitted: string;
+    indexed: string;
+  }>;
+}
+
+interface InspectionResult {
+  url: string;
+  success: boolean;
+  verdict: string;
+  coverageState?: string;
+  lastCrawlTime?: string | null;
+  pageFetchState?: string;
+  crawledAs?: string;
+  mobileUsability?: string;
+  indexingState?: string;
+  error?: string;
 }
 
 function DeltaIndicator({
@@ -127,6 +163,23 @@ function AnalyticsContent() {
     top3Keywords: number;
     top10Keywords: number;
     top100Keywords: number;
+    avgPosition: number;
+  } | null>(null);
+
+  // Pages tab state
+  const [sitemaps, setSitemaps] = useState<SitemapData[]>([]);
+  const [sitemapLoading, setSitemapLoading] = useState(false);
+  const [sitemapUrl, setSitemapUrl] = useState('');
+  const [submittingSitemap, setSubmittingSitemap] = useState(false);
+  const [removingSitemap, setRemovingSitemap] = useState<string | null>(null);
+  const [inspectionResults, setInspectionResults] = useState<Record<string, InspectionResult>>({});
+  const [inspectingUrls, setInspectingUrls] = useState<Set<string>>(new Set());
+  const [indexingUrls, setIndexingUrls] = useState<Set<string>>(new Set());
+  const [indexingAll, setIndexingAll] = useState(false);
+  const [pageStats, setPageStats] = useState<{
+    totalPages: number;
+    totalClicks: number;
+    totalImpressions: number;
     avgPosition: number;
   } | null>(null);
 
@@ -190,6 +243,7 @@ function AnalyticsContent() {
 
       if (pagesData.success) {
         setPages(pagesData.data);
+        if (pagesData.stats) setPageStats(pagesData.stats);
       }
     } catch (error) {
       console.error('Failed to fetch analytics:', error);
@@ -198,9 +252,219 @@ function AnalyticsContent() {
     }
   }, [selectedWebsiteId, period]);
 
+  const fetchSitemaps = useCallback(async () => {
+    if (!selectedWebsiteId) return;
+    setSitemapLoading(true);
+    try {
+      const res = await fetch(`/api/seo/indexing?websiteId=${selectedWebsiteId}`);
+      const data = await res.json();
+      if (data.success) {
+        setSitemaps(data.data.sitemaps || []);
+      }
+    } catch (err) {
+      console.error('Failed to fetch sitemaps:', err);
+    } finally {
+      setSitemapLoading(false);
+    }
+  }, [selectedWebsiteId]);
+
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  useEffect(() => {
+    if (activeTab === 'pages') {
+      fetchSitemaps();
+    }
+  }, [activeTab, fetchSitemaps]);
+
+  // Reset inspection results when website changes
+  useEffect(() => {
+    setInspectionResults({});
+    setInspectingUrls(new Set());
+    setSitemaps([]);
+  }, [selectedWebsiteId]);
+
+  const handleSubmitSitemap = async () => {
+    if (!sitemapUrl || !selectedWebsiteId) return;
+    setSubmittingSitemap(true);
+    try {
+      const res = await fetch('/api/seo/indexing', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ websiteId: selectedWebsiteId, sitemapUrl }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setSitemapUrl('');
+        fetchSitemaps();
+      } else {
+        alert(data.error || 'Failed to submit sitemap');
+      }
+    } catch {
+      alert('Failed to submit sitemap');
+    } finally {
+      setSubmittingSitemap(false);
+    }
+  };
+
+  const handleRemoveSitemap = async (path: string) => {
+    if (!selectedWebsiteId) return;
+    setRemovingSitemap(path);
+    try {
+      const res = await fetch('/api/seo/indexing', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ websiteId: selectedWebsiteId, sitemapUrl: path }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        fetchSitemaps();
+      } else {
+        alert(data.error || 'Failed to remove sitemap');
+      }
+    } catch {
+      alert('Failed to remove sitemap');
+    } finally {
+      setRemovingSitemap(null);
+    }
+  };
+
+  const handleInspectUrl = async (url: string) => {
+    if (!selectedWebsiteId) return;
+    setInspectingUrls(prev => new Set(prev).add(url));
+    try {
+      const res = await fetch('/api/seo/indexing/inspect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ websiteId: selectedWebsiteId, urls: [url] }),
+      });
+      const data = await res.json();
+      if (data.success && data.data.results.length > 0) {
+        setInspectionResults(prev => ({ ...prev, [url]: data.data.results[0] }));
+      }
+    } catch {
+      setInspectionResults(prev => ({
+        ...prev,
+        [url]: { url, success: false, verdict: 'ERROR', error: 'Inspection failed' },
+      }));
+    } finally {
+      setInspectingUrls(prev => {
+        const next = new Set(prev);
+        next.delete(url);
+        return next;
+      });
+    }
+  };
+
+  const handleIndexUrl = async (url: string) => {
+    if (!selectedWebsiteId) return;
+    setIndexingUrls(prev => new Set(prev).add(url));
+    try {
+      const res = await fetch('/api/seo/indexing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ websiteId: selectedWebsiteId, urls: [url] }),
+      });
+      const data = await res.json();
+      if (!data.success) {
+        alert(data.error || 'Failed to request indexing');
+      }
+    } catch {
+      alert('Failed to request indexing');
+    } finally {
+      setIndexingUrls(prev => {
+        const next = new Set(prev);
+        next.delete(url);
+        return next;
+      });
+    }
+  };
+
+  const handleIndexAll = async () => {
+    if (!selectedWebsiteId || pages.length === 0) return;
+    setIndexingAll(true);
+    try {
+      const urls = pages.map(p => p.url);
+      const res = await fetch('/api/seo/indexing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ websiteId: selectedWebsiteId, urls }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert(`Submitted ${data.data.submitted} URLs for indexing${data.data.failed ? `, ${data.data.failed} failed` : ''}`);
+      } else {
+        alert(data.error || 'Failed to request indexing');
+      }
+    } catch {
+      alert('Failed to request indexing');
+    } finally {
+      setIndexingAll(false);
+    }
+  };
+
+  const handleInspectAll = async () => {
+    if (!selectedWebsiteId || pages.length === 0) return;
+    // Inspect in batches of 10
+    const urls = pages.slice(0, 10).map(p => p.url);
+    for (const url of urls) {
+      setInspectingUrls(prev => new Set(prev).add(url));
+    }
+    try {
+      const res = await fetch('/api/seo/indexing/inspect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ websiteId: selectedWebsiteId, urls }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        const newResults: Record<string, InspectionResult> = {};
+        for (const result of data.data.results) {
+          newResults[result.url] = result;
+        }
+        setInspectionResults(prev => ({ ...prev, ...newResults }));
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setInspectingUrls(new Set());
+    }
+  };
+
+  const getVerdictBadge = (result: InspectionResult) => {
+    if (result.verdict === 'PASS') {
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-900/30 text-emerald-400 text-xs rounded-full font-medium">
+          <CheckCircle2 className="h-3 w-3" /> Indexed
+        </span>
+      );
+    }
+    if (result.verdict === 'ERROR') {
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-900/30 text-red-400 text-xs rounded-full font-medium">
+          <XCircle className="h-3 w-3" /> Error
+        </span>
+      );
+    }
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-900/30 text-amber-400 text-xs rounded-full font-medium">
+        <AlertCircle className="h-3 w-3" /> Not Indexed
+      </span>
+    );
+  };
+
+  // Compute sitemap totals
+  const sitemapTotals = sitemaps.reduce(
+    (acc, s) => {
+      for (const c of (s.contents || [])) {
+        acc.submitted += parseInt(c.submitted || '0', 10);
+        acc.indexed += parseInt(c.indexed || '0', 10);
+      }
+      return acc;
+    },
+    { submitted: 0, indexed: 0 }
+  );
 
   const selectedWebsite = websites.find((w) => w._id === selectedWebsiteId);
 
@@ -537,102 +801,346 @@ function AnalyticsContent() {
 
             {/* PAGES TAB */}
             {activeTab === 'pages' && (
-              <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
-                <div className="p-5 border-b border-zinc-800 flex items-center justify-between">
-                  <div>
-                    <h3 className="text-lg font-medium">Top Pages</h3>
-                    <p className="text-xs text-zinc-500 mt-0.5">
-                      Your best performing pages on Google
+              <div className="space-y-6">
+                {/* Summary Cards */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="p-2 bg-blue-500/20 rounded-lg">
+                        <FileText className="h-5 w-5 text-blue-400" />
+                      </div>
+                    </div>
+                    <p className="text-3xl font-bold">{pageStats?.totalPages || pages.length}</p>
+                    <p className="text-sm text-zinc-500 mt-1">Pages in GSC</p>
+                    <p className="text-xs text-zinc-600 mt-0.5">Pages with search impressions</p>
+                  </div>
+
+                  <div className="bg-zinc-900 border border-emerald-900/30 rounded-xl p-5">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="p-2 bg-emerald-500/20 rounded-lg">
+                        <CheckCircle2 className="h-5 w-5 text-emerald-400" />
+                      </div>
+                    </div>
+                    <p className="text-3xl font-bold text-emerald-400">
+                      {sitemapTotals.indexed || '--'}
+                    </p>
+                    <p className="text-sm text-zinc-500 mt-1">Indexed Pages</p>
+                    <p className="text-xs text-zinc-600 mt-0.5">Pages indexed from sitemap</p>
+                  </div>
+
+                  <div className="bg-zinc-900 border border-amber-900/30 rounded-xl p-5">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="p-2 bg-amber-500/20 rounded-lg">
+                        <Map className="h-5 w-5 text-amber-400" />
+                      </div>
+                    </div>
+                    <p className="text-3xl font-bold text-amber-400">
+                      {sitemapTotals.submitted || '--'}
+                    </p>
+                    <p className="text-sm text-zinc-500 mt-1">Submitted in Sitemap</p>
+                    <p className="text-xs text-zinc-600 mt-0.5">Total URLs in sitemaps</p>
+                  </div>
+
+                  <div className="bg-zinc-900 border border-purple-900/30 rounded-xl p-5">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="p-2 bg-purple-500/20 rounded-lg">
+                        <Link2 className="h-5 w-5 text-purple-400" />
+                      </div>
+                    </div>
+                    <p className="text-3xl font-bold text-purple-400">{sitemaps.length}</p>
+                    <p className="text-sm text-zinc-500 mt-1">Sitemaps</p>
+                    <p className="text-xs text-zinc-600 mt-0.5">
+                      {sitemaps.length > 0 ? 'Submitted to Google' : 'None submitted yet'}
                     </p>
                   </div>
-                  {pages.length > 0 && (
-                    <button
-                      onClick={async () => {
-                        const urls = pages.map((p) => p.url);
-                        try {
-                          const res = await fetch('/api/seo/indexing', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ websiteId: selectedWebsiteId, urls }),
-                          });
-                          const data = await res.json();
-                          alert(data.success ? `Submitted ${data.data.submitted} URLs for indexing` : data.error);
-                        } catch {
-                          alert('Failed to request indexing');
-                        }
-                      }}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm rounded-lg"
-                    >
-                      <Zap className="h-3.5 w-3.5" />
-                      Index All
-                    </button>
-                  )}
                 </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="bg-zinc-800/50 text-left text-xs text-zinc-400 uppercase tracking-wider">
-                        <th className="px-5 py-3 w-10">#</th>
-                        <th className="px-5 py-3">Page</th>
-                        <th className="px-5 py-3 text-right">Clicks</th>
-                        <th className="px-5 py-3 text-right">Impressions</th>
-                        <th className="px-5 py-3 text-right">CTR</th>
-                        <th className="px-5 py-3 text-right">Position</th>
-                        <th className="px-5 py-3 text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {pages.map((page, i) => (
-                        <tr key={page.id} className="border-t border-zinc-800/50 hover:bg-zinc-800/30 transition-colors">
-                          <td className="px-5 py-3.5 text-zinc-500 text-sm">{i + 1}</td>
-                          <td className="px-5 py-3.5">
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium text-sm truncate max-w-md">{page.path}</span>
-                              <a
-                                href={page.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-zinc-500 hover:text-purple-400 flex-shrink-0"
+
+                {/* Sitemap Management */}
+                <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+                  <div className="p-5 border-b border-zinc-800">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-lg font-medium flex items-center gap-2">
+                          <Map className="h-5 w-5 text-blue-400" />
+                          Sitemaps
+                        </h3>
+                        <p className="text-xs text-zinc-500 mt-0.5">
+                          Submit and manage your XML sitemaps in Google Search Console
+                        </p>
+                      </div>
+                      <button
+                        onClick={fetchSitemaps}
+                        disabled={sitemapLoading}
+                        className="p-2 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800"
+                      >
+                        <RefreshCw className={`h-4 w-4 ${sitemapLoading ? 'animate-spin' : ''}`} />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Submit New Sitemap */}
+                  <div className="p-5 border-b border-zinc-800 bg-zinc-800/20">
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="text"
+                        value={sitemapUrl}
+                        onChange={(e) => setSitemapUrl(e.target.value)}
+                        placeholder={`https://${selectedWebsite?.domain || 'example.com'}/sitemap.xml`}
+                        className="flex-1 px-4 py-2.5 bg-zinc-900 border border-zinc-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-zinc-600"
+                      />
+                      <button
+                        onClick={handleSubmitSitemap}
+                        disabled={!sitemapUrl || submittingSitemap}
+                        className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded-lg font-medium"
+                      >
+                        {submittingSitemap ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Send className="h-4 w-4" />
+                        )}
+                        Submit Sitemap
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Sitemap List */}
+                  {sitemapLoading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
+                    </div>
+                  ) : sitemaps.length > 0 ? (
+                    <div className="divide-y divide-zinc-800">
+                      {sitemaps.map((sitemap) => {
+                        const submitted = (sitemap.contents || []).reduce(
+                          (sum, c) => sum + parseInt(c.submitted || '0', 10), 0
+                        );
+                        const indexed = (sitemap.contents || []).reduce(
+                          (sum, c) => sum + parseInt(c.indexed || '0', 10), 0
+                        );
+                        const indexRatio = submitted > 0 ? Math.round((indexed / submitted) * 100) : 0;
+
+                        return (
+                          <div key={sitemap.path} className="p-5 hover:bg-zinc-800/30 transition-colors">
+                            <div className="flex items-center justify-between">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <p className="font-medium text-sm truncate">{sitemap.path}</p>
+                                  {sitemap.isPending ? (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-900/30 text-amber-400 text-xs rounded-full">
+                                      <Clock className="h-3 w-3" /> Pending
+                                    </span>
+                                  ) : parseInt(sitemap.errors || '0') > 0 ? (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-900/30 text-red-400 text-xs rounded-full">
+                                      <XCircle className="h-3 w-3" /> {sitemap.errors} errors
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-900/30 text-emerald-400 text-xs rounded-full">
+                                      <CheckCircle2 className="h-3 w-3" /> Active
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-4 mt-2 text-xs text-zinc-500">
+                                  <span>Submitted: {submitted} URLs</span>
+                                  <span>Indexed: {indexed} URLs</span>
+                                  <span>Coverage: {indexRatio}%</span>
+                                  {sitemap.lastSubmitted && (
+                                    <span>Last submitted: {new Date(sitemap.lastSubmitted).toLocaleDateString()}</span>
+                                  )}
+                                </div>
+                                {/* Index progress bar */}
+                                <div className="mt-2 w-full max-w-xs bg-zinc-800 rounded-full h-1.5">
+                                  <div
+                                    className={`h-1.5 rounded-full ${
+                                      indexRatio >= 80 ? 'bg-emerald-500' : indexRatio >= 50 ? 'bg-amber-500' : 'bg-red-500'
+                                    }`}
+                                    style={{ width: `${Math.min(indexRatio, 100)}%` }}
+                                  />
+                                </div>
+                              </div>
+                              <button
+                                onClick={() => handleRemoveSitemap(sitemap.path!)}
+                                disabled={removingSitemap === sitemap.path}
+                                className="p-2 text-zinc-500 hover:text-red-400 rounded-lg hover:bg-zinc-800 ml-4"
+                                title="Remove sitemap"
                               >
-                                <ExternalLink className="h-3.5 w-3.5" />
-                              </a>
+                                {removingSitemap === sitemap.path ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Trash2 className="h-4 w-4" />
+                                )}
+                              </button>
                             </div>
-                          </td>
-                          <td className="px-5 py-3.5 text-right text-sm">{formatNumber(page.clicks)}</td>
-                          <td className="px-5 py-3.5 text-right text-sm text-zinc-400">{formatNumber(page.impressions)}</td>
-                          <td className="px-5 py-3.5 text-right text-sm text-zinc-400">{(page.ctr * 100).toFixed(1)}%</td>
-                          <td className="px-5 py-3.5 text-right text-sm">{page.position.toFixed(1)}</td>
-                          <td className="px-5 py-3.5 text-right">
-                            <button
-                              onClick={async () => {
-                                try {
-                                  const res = await fetch('/api/seo/indexing', {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ websiteId: selectedWebsiteId, urls: [page.url] }),
-                                  });
-                                  const data = await res.json();
-                                  alert(data.success ? 'Indexing requested!' : data.error);
-                                } catch {
-                                  alert('Failed');
-                                }
-                              }}
-                              className="text-emerald-400 hover:text-emerald-300"
-                              title="Request indexing"
-                            >
-                              <Zap className="h-4 w-4" />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  {pages.length === 0 && (
-                    <div className="text-center py-12 text-zinc-500">
-                      <FileText className="h-8 w-8 mx-auto mb-2 text-zinc-700" />
-                      <p>No page data available</p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 text-zinc-500">
+                      <Map className="h-8 w-8 mx-auto mb-2 text-zinc-700" />
+                      <p className="text-sm">No sitemaps submitted yet</p>
+                      <p className="text-xs text-zinc-600 mt-1">
+                        Submit your sitemap.xml to help Google discover all your pages
+                      </p>
                     </div>
                   )}
+                </div>
+
+                {/* Pages Table */}
+                <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+                  <div className="p-5 border-b border-zinc-800 flex items-center justify-between">
+                    <div>
+                      <h3 className="text-lg font-medium">Pages Performance</h3>
+                      <p className="text-xs text-zinc-500 mt-0.5">
+                        Your pages with search impressions - check indexing status and request indexing
+                      </p>
+                    </div>
+                    {pages.length > 0 && (
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={handleInspectAll}
+                          disabled={inspectingUrls.size > 0}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 disabled:opacity-50 text-white text-sm rounded-lg"
+                        >
+                          {inspectingUrls.size > 0 ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Search className="h-3.5 w-3.5" />
+                          )}
+                          Check Index Status
+                        </button>
+                        <button
+                          onClick={handleIndexAll}
+                          disabled={indexingAll}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm rounded-lg"
+                        >
+                          {indexingAll ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Zap className="h-3.5 w-3.5" />
+                          )}
+                          Index All Pages
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="bg-zinc-800/50 text-left text-xs text-zinc-400 uppercase tracking-wider">
+                          <th className="px-5 py-3 w-10">#</th>
+                          <th className="px-5 py-3">Page</th>
+                          <th className="px-5 py-3 text-center">Index Status</th>
+                          <th className="px-5 py-3 text-right">Clicks</th>
+                          <th className="px-5 py-3 text-right">Impressions</th>
+                          <th className="px-5 py-3 text-right">CTR</th>
+                          <th className="px-5 py-3 text-right">Position</th>
+                          <th className="px-5 py-3 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {pages.map((page, i) => {
+                          const inspection = inspectionResults[page.url];
+                          const isInspecting = inspectingUrls.has(page.url);
+                          const isIndexing = indexingUrls.has(page.url);
+
+                          return (
+                            <tr key={page.id} className="border-t border-zinc-800/50 hover:bg-zinc-800/30 transition-colors">
+                              <td className="px-5 py-3.5 text-zinc-500 text-sm">{i + 1}</td>
+                              <td className="px-5 py-3.5">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-medium text-sm truncate max-w-sm">{page.path}</span>
+                                  <a
+                                    href={page.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-zinc-500 hover:text-purple-400 flex-shrink-0"
+                                  >
+                                    <ExternalLink className="h-3.5 w-3.5" />
+                                  </a>
+                                </div>
+                                {/* Show inspection details if available */}
+                                {inspection && inspection.success && (
+                                  <div className="flex items-center gap-3 mt-1 text-xs text-zinc-600">
+                                    {inspection.lastCrawlTime && (
+                                      <span className="flex items-center gap-1">
+                                        <Clock className="h-3 w-3" />
+                                        Crawled: {new Date(inspection.lastCrawlTime).toLocaleDateString()}
+                                      </span>
+                                    )}
+                                    {inspection.crawledAs && inspection.crawledAs !== 'Unknown' && (
+                                      <span className="flex items-center gap-1">
+                                        <Smartphone className="h-3 w-3" />
+                                        {inspection.crawledAs}
+                                      </span>
+                                    )}
+                                    {inspection.coverageState && inspection.coverageState !== 'Unknown' && (
+                                      <span>{inspection.coverageState}</span>
+                                    )}
+                                  </div>
+                                )}
+                              </td>
+                              <td className="px-5 py-3.5 text-center">
+                                {isInspecting ? (
+                                  <Loader2 className="h-4 w-4 animate-spin text-blue-400 mx-auto" />
+                                ) : inspection ? (
+                                  getVerdictBadge(inspection)
+                                ) : (
+                                  <button
+                                    onClick={() => handleInspectUrl(page.url)}
+                                    className="text-xs text-zinc-500 hover:text-blue-400 transition-colors"
+                                    title="Check index status"
+                                  >
+                                    Check
+                                  </button>
+                                )}
+                              </td>
+                              <td className="px-5 py-3.5 text-right text-sm">{formatNumber(page.clicks)}</td>
+                              <td className="px-5 py-3.5 text-right text-sm text-zinc-400">{formatNumber(page.impressions)}</td>
+                              <td className="px-5 py-3.5 text-right text-sm text-zinc-400">{(page.ctr * 100).toFixed(1)}%</td>
+                              <td className="px-5 py-3.5 text-right">
+                                <span
+                                  className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                                    page.position <= 3
+                                      ? 'bg-emerald-900/30 text-emerald-400'
+                                      : page.position <= 10
+                                      ? 'bg-blue-900/30 text-blue-400'
+                                      : page.position <= 20
+                                      ? 'bg-amber-900/30 text-amber-400'
+                                      : 'bg-zinc-800 text-zinc-400'
+                                  }`}
+                                >
+                                  {page.position.toFixed(1)}
+                                </span>
+                              </td>
+                              <td className="px-5 py-3.5 text-right">
+                                <button
+                                  onClick={() => handleIndexUrl(page.url)}
+                                  disabled={isIndexing}
+                                  className="text-emerald-400 hover:text-emerald-300 disabled:opacity-50"
+                                  title="Request indexing"
+                                >
+                                  {isIndexing ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <Zap className="h-4 w-4" />
+                                  )}
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                    {pages.length === 0 && (
+                      <div className="text-center py-12 text-zinc-500">
+                        <FileText className="h-8 w-8 mx-auto mb-2 text-zinc-700" />
+                        <p>No page data available</p>
+                        <p className="text-xs text-zinc-600 mt-1">
+                          Pages will appear here once they start getting search impressions
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             )}
