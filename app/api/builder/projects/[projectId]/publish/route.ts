@@ -140,7 +140,11 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     if (!project.gitRepoUrl) {
       repoName = `smaksly-${project._id.toString().slice(-8)}`;
     }
-    const predictedDeployUrl = project.deploymentUrl || `https://${repoName}.vercel.app`;
+    // Prefer custom domain from Website model over Vercel URL
+    const customDomainUrl = website?.customDomain && !website.customDomain.includes('.vercel.app')
+      ? (website.customDomain.startsWith('http') ? website.customDomain : `https://${website.customDomain}`)
+      : null;
+    const predictedDeployUrl = customDomainUrl || project.deploymentUrl || `https://${repoName}.vercel.app`;
 
     // Create temp directory
     tmpDir = await dir({ unsafeCleanup: true });
@@ -1202,7 +1206,7 @@ export async function getAllBlogsForSitemap(): Promise<BlogPost[]> {
   await fs.writeFile(path.join(projectPath, 'lib', 'api.ts'), apiClientCode);
 
   // Generate app/sitemap.ts - fully dynamic sitemap (pages + blogs fetched via API with ISR)
-  const sitemapCode = generateSitemapCode(project, pages, isMultiLang, projectLanguages, defaultLanguage);
+  const sitemapCode = generateSitemapCode(project, pages, isMultiLang, projectLanguages, defaultLanguage, predictedDeployUrl);
   await fs.writeFile(path.join(projectPath, 'app', 'sitemap.ts'), sitemapCode);
 
   // Generate app/robots.ts
@@ -1271,18 +1275,18 @@ function generateSitemapCode(
   pages: Array<Record<string, unknown>>,
   isMultiLang: boolean,
   projectLanguages: Array<{ code: string; direction: string; name: string }>,
-  defaultLanguage: string
+  defaultLanguage: string,
+  resolvedDeployUrl?: string
 ): string {
-  const hasBlogPages = pages.some(
-    (p) => p.code && (p.code as string).trim().length > 0 && ((p.type as string) === 'blog-listing' || (p.type as string) === 'blog-post')
-  );
+  // Always include blog posts in sitemap — blogs are managed via API, not page types
+  const hasBlogPages = true;
   const langCodes = projectLanguages.map((l) => l.code);
 
   if (isMultiLang) {
     return `import { MetadataRoute } from 'next';
 import { getPages${hasBlogPages ? ', getAllBlogsForSitemap' : ''} } from '@/lib/api';
 
-const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || '${project.deploymentUrl || ''}';
+const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || '${resolvedDeployUrl || project.deploymentUrl || ''}';
 const LANGUAGES = ${JSON.stringify(langCodes)};
 const DEFAULT_LANG = '${defaultLanguage}';
 
@@ -1338,7 +1342,7 @@ ${hasBlogPages ? `
     return `import { MetadataRoute } from 'next';
 import { getPages${hasBlogPages ? ', getAllBlogsForSitemap' : ''} } from '@/lib/api';
 
-const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || '${project.deploymentUrl || ''}';
+const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || '${resolvedDeployUrl || project.deploymentUrl || ''}';
 
 export const revalidate = 60;
 

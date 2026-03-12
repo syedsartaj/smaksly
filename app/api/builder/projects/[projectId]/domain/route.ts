@@ -179,6 +179,38 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       console.error('Failed to update NEXT_PUBLIC_SITE_URL on Vercel:', envError);
     }
 
+    // Trigger a redeploy so the build-time NEXT_PUBLIC_SITE_URL takes effect in sitemap/robots/metadata
+    try {
+      const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
+      const GITHUB_USERNAME = process.env.GITHUB_USERNAME || 'smaksly';
+      const gitRepoName = project.gitRepoName || `smaksly-${project._id.toString().slice(-8)}`;
+      if (GITHUB_TOKEN) {
+        // Get GitHub repo ID (required by Vercel API)
+        const repoRes = await fetch(
+          `https://api.github.com/repos/${GITHUB_USERNAME}/${gitRepoName}`,
+          { headers: { Authorization: `token ${GITHUB_TOKEN}`, Accept: 'application/vnd.github.v3+json' } }
+        );
+        if (repoRes.ok) {
+          const repoData = await repoRes.json();
+          await fetch('https://api.vercel.com/v13/deployments', {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${VERCEL_TOKEN}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              name: gitRepoName,
+              project: project.vercelProjectId,
+              target: 'production',
+              gitSource: { type: 'github', repoId: repoData.id, ref: 'main' },
+            }),
+          });
+        }
+      }
+    } catch (deployError) {
+      console.error('Failed to trigger redeploy after domain change:', deployError);
+    }
+
     // Build required DNS records for the user
     const parts = domain.split('.');
     const isApex = parts.length === 2;
