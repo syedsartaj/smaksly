@@ -61,7 +61,7 @@ const EmailSchema = new Schema<IEmail>(
 // Compound indexes for common queries
 EmailSchema.index({ accountId: 1, folder: 1, receivedAt: -1 });
 EmailSchema.index({ accountId: 1, isRead: 1 });
-EmailSchema.index({ messageId: 1 }, { unique: true });
+EmailSchema.index({ accountId: 1, messageId: 1 }, { unique: true });
 EmailSchema.index({ accountId: 1, subject: 'text', snippet: 'text' });
 
 export const Email: Model<IEmail> =

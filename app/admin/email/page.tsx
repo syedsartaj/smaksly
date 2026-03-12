@@ -886,7 +886,7 @@ const EMAIL_PRESETS = {
     imapHost: 'imap.zoho.com', imapPort: '993',
     smtpHost: 'smtp.zoho.com', smtpPort: '587',
     separateSmtpAuth: false,
-    hint: 'Use your Zoho email as username. Requires Zoho Mail paid plan for IMAP access.',
+    hint: 'Use your Zoho email as username. For aliases, use the same IMAP credentials with each alias email address.',
   },
   'cloudflare-brevo': {
     label: 'Cloudflare + Brevo',
