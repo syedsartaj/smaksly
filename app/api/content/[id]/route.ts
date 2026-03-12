@@ -73,6 +73,14 @@ export async function PUT(
       }
     }
 
+    // Truncate meta fields to fit model constraints
+    if (typeof updateData.metaTitle === 'string') {
+      updateData.metaTitle = updateData.metaTitle.slice(0, 70);
+    }
+    if (typeof updateData.metaDescription === 'string') {
+      updateData.metaDescription = updateData.metaDescription.slice(0, 160);
+    }
+
     // Set publishedAt when publishing for the first time
     if (body.status === 'published' && !currentContent.publishedAt && !body.publishedAt) {
       updateData.publishedAt = new Date();

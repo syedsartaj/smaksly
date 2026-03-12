@@ -147,6 +147,10 @@ export async function POST(req: NextRequest) {
     const plainText = rawBody.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
     const wordCount = plainText ? plainText.split(/\s+/).length : 0;
 
+    // Truncate meta fields to fit model constraints
+    const metaTitle = (body.metaTitle || body.seo?.metaTitle || '')?.slice(0, 70) || undefined;
+    const metaDescription = (body.metaDescription || body.seo?.metaDescription || '')?.slice(0, 160) || undefined;
+
     const content = await Content.create({
       websiteId: new mongoose.Types.ObjectId(websiteId),
       title,
@@ -156,8 +160,8 @@ export async function POST(req: NextRequest) {
       excerpt: body.excerpt,
       body: rawBody,
       featuredImage: body.featuredImage,
-      metaTitle: body.metaTitle || body.seo?.metaTitle,
-      metaDescription: body.metaDescription || body.seo?.metaDescription,
+      metaTitle,
+      metaDescription,
       authorName: body.author || 'Admin',
       keywordId: body.keywordId
         ? new mongoose.Types.ObjectId(body.keywordId)
