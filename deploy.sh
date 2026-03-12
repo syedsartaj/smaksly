@@ -83,7 +83,7 @@ gcloud run deploy ${SERVICE_NAME} \
     --memory=1Gi \
     --cpu=1 \
     --timeout=600 \
-    --set-env-vars="NODE_ENV=production"
+    --set-env-vars="NODE_ENV=production,SMAKSLY_API_URL=https://smakaly-334466283114.me-central1.run.app"
 
 # Get the service URL
 SERVICE_URL=$(gcloud run services describe ${SERVICE_NAME} --region=${REGION} --format='value(status.url)')
