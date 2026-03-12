@@ -39,11 +39,23 @@ export async function GET(req: NextRequest) {
       .sort({ order: 1 })
       .lean();
 
-    const data = pages.map((p) => ({
-      path: p.path,
-      type: p.type,
-      updatedAt: p.updatedAt?.toISOString() || new Date().toISOString(),
-    }));
+    // Normalize paths to match actual published routes
+    const data = pages.map((p) => {
+      let normalizedPath = p.path;
+      // Blog listing always publishes to /blog (not /blogs or other variants)
+      if (p.type === 'blog-listing' && normalizedPath !== '/blog') {
+        normalizedPath = '/blog';
+      }
+      // Blog post template always publishes to /blog/[slug]
+      if (p.type === 'blog-post') {
+        normalizedPath = '/blog/[slug]';
+      }
+      return {
+        path: normalizedPath,
+        type: p.type,
+        updatedAt: p.updatedAt?.toISOString() || new Date().toISOString(),
+      };
+    });
 
     return NextResponse.json({
       success: true,

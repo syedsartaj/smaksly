@@ -328,7 +328,23 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
             const errData = await createRes.json();
             // If env var already exists, patch it
             if (errData.error?.code === 'ENV_ALREADY_EXISTS') {
-              const existingId = errData.error?.envVarId || errData.error?.id;
+              let existingId = errData.error?.envVarId || errData.error?.id;
+              // Fallback: list env vars to find the ID if not returned in error
+              if (!existingId) {
+                try {
+                  const listRes = await fetch(
+                    `https://api.vercel.com/v9/projects/${vercelProjectId}/env`,
+                    { headers: { Authorization: `Bearer ${VERCEL_TOKEN}` } }
+                  );
+                  if (listRes.ok) {
+                    const listData = await listRes.json();
+                    const found = (listData.envs || []).find((e: { key?: string }) => e.key === envVar.key);
+                    if (found) existingId = found.id;
+                  }
+                } catch (listErr) {
+                  console.error(`Failed to list env vars for ${envVar.key}:`, listErr);
+                }
+              }
               if (existingId) {
                 await fetch(
                   `https://api.vercel.com/v9/projects/${vercelProjectId}/env/${existingId}`,
@@ -341,8 +357,13 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
                     body: JSON.stringify({ value: envVar.value }),
                   }
                 );
+                console.log(`[Publish] Updated env var ${envVar.key} = ${envVar.value} (id: ${existingId})`);
+              } else {
+                console.warn(`[Publish] Could not find env var ID for ${envVar.key} to update`);
               }
             }
+          } else {
+            console.log(`[Publish] Created env var ${envVar.key} = ${envVar.value}`);
           }
         } catch (envError) {
           console.error(`Failed to set env var ${envVar.key}:`, envError);
