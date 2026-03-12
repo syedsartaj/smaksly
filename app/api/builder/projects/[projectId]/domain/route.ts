@@ -42,10 +42,24 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
 
     const data = await res.json();
 
+    // Enrich each domain with verification status and required DNS records
+    const domains = (data.domains || []).map((d: Record<string, unknown>) => {
+      const domainName = d.name as string;
+      const parts = domainName.split('.');
+      const isApex = parts.length === 2;
+
+      return {
+        ...d,
+        dnsRecords: isApex
+          ? [{ type: 'A', name: '@', value: '76.76.21.21' }]
+          : [{ type: 'CNAME', name: parts[0], value: 'cname.vercel-dns.com' }],
+      };
+    });
+
     return NextResponse.json({
       success: true,
       data: {
-        domains: data.domains || [],
+        domains,
         vercelProjectId: project.vercelProjectId,
         deploymentUrl: project.deploymentUrl,
       },
@@ -160,10 +174,25 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       console.error('Failed to update NEXT_PUBLIC_SITE_URL on Vercel:', envError);
     }
 
+    // Build required DNS records for the user
+    const parts = domain.split('.');
+    const isApex = parts.length === 2;
+    const requiredRecords = isApex
+      ? [
+          { type: 'A', name: '@', value: '76.76.21.21', description: 'Points your domain to Vercel' },
+          { type: 'AAAA', name: '@', value: '2606:50c0:8000::1a', description: 'IPv6 (optional)' },
+        ]
+      : [
+          { type: 'CNAME', name: parts[0], value: 'cname.vercel-dns.com', description: 'Points your subdomain to Vercel' },
+        ];
+
     return NextResponse.json({
       success: true,
-      data: addData,
-      message: `Domain ${domain} added successfully. Sitemap and metadata will use the custom domain on next Vercel build.`,
+      data: {
+        ...addData,
+        requiredRecords,
+      },
+      message: `Domain ${domain} added. Configure the DNS records below, then verify.`,
     });
   } catch (error) {
     console.error('Error adding domain:', error);

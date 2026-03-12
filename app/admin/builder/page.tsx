@@ -21,11 +21,19 @@ import {
 import { useShallow } from 'zustand/react/shallow';
 import { useBuilderStore, BuilderProject } from '@/stores/useBuilderStore';
 
+interface DnsRecord {
+  type: string;
+  name: string;
+  value: string;
+  description?: string;
+}
+
 interface VercelDomain {
   name: string;
   verified: boolean;
   verification?: { type: string; domain: string; value: string }[];
   configuredBy?: string;
+  dnsRecords?: DnsRecord[];
 }
 
 export default function BuilderProjectsPage() {
@@ -52,6 +60,8 @@ export default function BuilderProjectsPage() {
   const [isAddingDomain, setIsAddingDomain] = useState(false);
   const [domainError, setDomainError] = useState('');
   const [removingDomain, setRemovingDomain] = useState<string | null>(null);
+  const [verifyingDomain, setVerifyingDomain] = useState<string | null>(null);
+  const [verifyResult, setVerifyResult] = useState<Record<string, { verified: boolean; message: string } | null>>({});
 
   const fetchProjects = useCallback(async () => {
     try {
@@ -97,6 +107,7 @@ export default function BuilderProjectsPage() {
     setNewDomain('');
     setDomainError('');
     setDomains([]);
+    setVerifyResult({});
     fetchDomains(project);
   };
 
@@ -146,6 +157,40 @@ export default function BuilderProjectsPage() {
       setDomainError('Failed to remove domain');
     } finally {
       setRemovingDomain(null);
+    }
+  };
+
+  const handleVerifyDomain = async (domain: string) => {
+    if (!domainModal) return;
+    setVerifyingDomain(domain);
+    setVerifyResult((prev) => ({ ...prev, [domain]: null }));
+    try {
+      const res = await fetch(`/api/builder/projects/${domainModal._id}/domain/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ domain }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setVerifyResult((prev) => ({
+          ...prev,
+          [domain]: { verified: data.data.verified, message: data.data.message },
+        }));
+        // Refresh domains to update status
+        fetchDomains(domainModal);
+      } else {
+        setVerifyResult((prev) => ({
+          ...prev,
+          [domain]: { verified: false, message: data.error || 'Verification failed' },
+        }));
+      }
+    } catch {
+      setVerifyResult((prev) => ({
+        ...prev,
+        [domain]: { verified: false, message: 'Failed to verify DNS' },
+      }));
+    } finally {
+      setVerifyingDomain(null);
     }
   };
 
@@ -522,63 +567,105 @@ export default function BuilderProjectsPage() {
                   No domains configured
                 </div>
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {domains.map((d) => (
                     <div
                       key={d.name}
-                      className="flex items-center justify-between px-3 py-2.5 bg-zinc-800 border border-zinc-700 rounded-lg"
+                      className="px-3 py-3 bg-zinc-800 border border-zinc-700 rounded-lg"
                     >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <Link className="h-4 w-4 text-zinc-500 flex-shrink-0" />
-                        <span className="text-sm text-white truncate">{d.name}</span>
-                        {d.verified !== false ? (
-                          <span className="flex items-center gap-1 px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400 text-[10px] rounded-full flex-shrink-0">
-                            <CheckCircle className="h-3 w-3" />
-                            Verified
-                          </span>
-                        ) : (
-                          <span className="flex items-center gap-1 px-1.5 py-0.5 bg-yellow-500/10 text-yellow-400 text-[10px] rounded-full flex-shrink-0">
-                            <AlertTriangle className="h-3 w-3" />
-                            Pending
-                          </span>
-                        )}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Link className="h-4 w-4 text-zinc-500 flex-shrink-0" />
+                          <span className="text-sm text-white truncate">{d.name}</span>
+                          {d.verified !== false ? (
+                            <span className="flex items-center gap-1 px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400 text-[10px] rounded-full flex-shrink-0">
+                              <CheckCircle className="h-3 w-3" />
+                              Verified
+                            </span>
+                          ) : (
+                            <span className="flex items-center gap-1 px-1.5 py-0.5 bg-yellow-500/10 text-yellow-400 text-[10px] rounded-full flex-shrink-0">
+                              <AlertTriangle className="h-3 w-3" />
+                              Pending
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1 flex-shrink-0 ml-2">
+                          <button
+                            onClick={() => handleVerifyDomain(d.name)}
+                            disabled={verifyingDomain === d.name}
+                            className="px-2.5 py-1 text-xs bg-zinc-700 hover:bg-zinc-600 text-zinc-300 hover:text-white rounded transition-colors disabled:opacity-50 flex items-center gap-1"
+                            title="Verify DNS"
+                          >
+                            {verifyingDomain === d.name ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <RefreshCw className="h-3 w-3" />
+                            )}
+                            Verify
+                          </button>
+                          <button
+                            onClick={() => handleRemoveDomain(d.name)}
+                            disabled={removingDomain === d.name}
+                            className="p-1 text-zinc-500 hover:text-red-400 transition-colors"
+                            title="Remove domain"
+                          >
+                            {removingDomain === d.name ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <X className="h-4 w-4" />
+                            )}
+                          </button>
+                        </div>
                       </div>
-                      <button
-                        onClick={() => handleRemoveDomain(d.name)}
-                        disabled={removingDomain === d.name}
-                        className="p-1 text-zinc-500 hover:text-red-400 transition-colors flex-shrink-0 ml-2"
-                        title="Remove domain"
-                      >
-                        {removingDomain === d.name ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <X className="h-4 w-4" />
-                        )}
-                      </button>
+
+                      {/* Verification result */}
+                      {verifyResult[d.name] && (
+                        <div className={`mt-2 px-2.5 py-1.5 rounded text-xs ${
+                          verifyResult[d.name]!.verified
+                            ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                            : 'bg-red-500/10 text-red-400 border border-red-500/20'
+                        }`}>
+                          {verifyResult[d.name]!.verified ? <CheckCircle className="h-3 w-3 inline mr-1" /> : <AlertTriangle className="h-3 w-3 inline mr-1" />}
+                          {verifyResult[d.name]!.message}
+                        </div>
+                      )}
+
+                      {/* DNS Records for this domain */}
+                      {d.dnsRecords && d.dnsRecords.length > 0 && d.verified === false && (
+                        <div className="mt-2.5 p-2.5 bg-zinc-900 rounded border border-zinc-700/50">
+                          <p className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1.5 font-medium">Required DNS Records</p>
+                          <div className="space-y-1.5">
+                            {d.dnsRecords.map((r, i) => (
+                              <div key={i} className="flex items-center gap-3 text-xs font-mono">
+                                <span className="px-1.5 py-0.5 bg-zinc-800 text-zinc-400 rounded text-[10px] w-14 text-center">{r.type}</span>
+                                <span className="text-zinc-400">{r.name}</span>
+                                <span className="text-zinc-600">&rarr;</span>
+                                <span className="text-emerald-400 select-all">{r.value}</span>
+                                <button
+                                  onClick={() => { navigator.clipboard.writeText(r.value); }}
+                                  className="text-zinc-600 hover:text-zinc-400 transition-colors"
+                                  title="Copy value"
+                                >
+                                  <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
               )}
             </div>
 
-            {/* DNS Instructions */}
-            {domains.some((d) => d.verified === false && d.verification?.length) && (
-              <div className="mt-4 p-3 bg-yellow-500/5 border border-yellow-500/20 rounded-lg">
-                <p className="text-xs font-medium text-yellow-400 mb-2">DNS Configuration Required</p>
-                {domains
-                  .filter((d) => d.verified === false && d.verification?.length)
-                  .map((d) => (
-                    <div key={d.name} className="text-xs text-zinc-400 space-y-1">
-                      <p className="text-zinc-300">{d.name}:</p>
-                      {d.verification?.map((v, i) => (
-                        <div key={i} className="pl-2 font-mono text-[11px]">
-                          <span className="text-zinc-500">Type:</span> {v.type} &nbsp;
-                          <span className="text-zinc-500">Name:</span> {v.domain} &nbsp;
-                          <span className="text-zinc-500">Value:</span> {v.value}
-                        </div>
-                      ))}
-                    </div>
-                  ))}
+            {/* DNS Help */}
+            {domains.some((d) => d.verified === false) && (
+              <div className="mt-4 p-3 bg-zinc-800/50 border border-zinc-700 rounded-lg">
+                <p className="text-xs text-zinc-400">
+                  Add the DNS records shown above at your domain registrar (Cloudflare, GoDaddy, Namecheap, etc.), then click <strong className="text-zinc-300">Verify</strong> to confirm.
+                  DNS changes can take up to 48 hours to propagate.
+                </p>
               </div>
             )}
 

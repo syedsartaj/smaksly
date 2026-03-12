@@ -287,7 +287,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     if (vercelProjectId && VERCEL_TOKEN) {
       const siteUrl = predictedDeployUrl;
       const envVars = [
-        { key: 'NEXT_PUBLIC_SMAKSLY_API', value: process.env.NEXT_PUBLIC_SITE_URL || 'https://smakaly-334466283114.me-central1.run.app', target: ['production', 'preview', 'development'], type: 'plain' },
+        { key: 'NEXT_PUBLIC_SMAKSLY_API', value: process.env.SMAKSLY_API_URL || process.env.NEXT_PUBLIC_SITE_URL || 'https://smakaly-334466283114.me-central1.run.app', target: ['production', 'preview', 'development'], type: 'plain' },
         { key: 'NEXT_PUBLIC_PROJECT_ID', value: project._id.toString(), target: ['production', 'preview', 'development'], type: 'plain' },
         { key: 'NEXT_PUBLIC_SITE_URL', value: siteUrl, target: ['production', 'preview', 'development'], type: 'plain' },
       ];
@@ -1247,7 +1247,8 @@ NEXT_PUBLIC_PROJECT_ID=${project._id}
   await fs.writeFile(path.join(projectPath, '.env.example'), envExample);
 
   // Generate .env with actual values (NEXT_PUBLIC_ vars are safe to commit - needed at build time)
-  const smakslyApi = process.env.NEXT_PUBLIC_SITE_URL || 'https://smakaly-334466283114.me-central1.run.app';
+  // SMAKSLY_API must always point to the admin platform, NOT the child site's domain
+  const smakslyApi = process.env.SMAKSLY_API_URL || process.env.NEXT_PUBLIC_SITE_URL || 'https://smakaly-334466283114.me-central1.run.app';
   const siteDeployUrl = predictedDeployUrl || project.deploymentUrl || '';
   const envFile = `NEXT_PUBLIC_SMAKSLY_API=${smakslyApi}
 NEXT_PUBLIC_PROJECT_ID=${project._id}
