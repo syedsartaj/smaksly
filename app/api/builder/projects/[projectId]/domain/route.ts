@@ -139,41 +139,44 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     }
 
     // Update NEXT_PUBLIC_SITE_URL env var on Vercel so sitemap/robots/metadata use the custom domain
+    // Strategy: list existing env vars first, then PATCH or POST — never rely on error response IDs
     try {
-      const envRes = await fetch(
-        `https://api.vercel.com/v10/projects/${project.vercelProjectId}/env`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${VERCEL_TOKEN}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            key: 'NEXT_PUBLIC_SITE_URL',
-            value: `https://${domain}`,
-            target: ['production', 'preview', 'development'],
-            type: 'plain',
-          }),
-        }
+      const newSiteUrl = `https://${domain}`;
+      let existingEnvId: string | null = null;
+
+      // List env vars to find existing NEXT_PUBLIC_SITE_URL
+      const listRes = await fetch(
+        `https://api.vercel.com/v9/projects/${project.vercelProjectId}/env`,
+        { headers: { Authorization: `Bearer ${VERCEL_TOKEN}` } }
       );
-      if (!envRes.ok) {
-        const errData = await envRes.json();
-        if (errData.error?.code === 'ENV_ALREADY_EXISTS') {
-          const existingId = errData.error?.envVarId || errData.error?.id;
-          if (existingId) {
-            await fetch(
-              `https://api.vercel.com/v9/projects/${project.vercelProjectId}/env/${existingId}`,
-              {
-                method: 'PATCH',
-                headers: {
-                  Authorization: `Bearer ${VERCEL_TOKEN}`,
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ value: `https://${domain}` }),
-              }
-            );
+      if (listRes.ok) {
+        const listData = await listRes.json();
+        const found = (listData.envs || []).find((e: { key?: string }) => e.key === 'NEXT_PUBLIC_SITE_URL');
+        if (found) existingEnvId = found.id;
+      }
+
+      if (existingEnvId) {
+        // PATCH existing
+        await fetch(
+          `https://api.vercel.com/v9/projects/${project.vercelProjectId}/env/${existingEnvId}`,
+          {
+            method: 'PATCH',
+            headers: { Authorization: `Bearer ${VERCEL_TOKEN}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ value: newSiteUrl }),
           }
-        }
+        );
+        console.log(`[Domain] Updated NEXT_PUBLIC_SITE_URL = ${newSiteUrl}`);
+      } else {
+        // POST new
+        await fetch(
+          `https://api.vercel.com/v10/projects/${project.vercelProjectId}/env`,
+          {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${VERCEL_TOKEN}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key: 'NEXT_PUBLIC_SITE_URL', value: newSiteUrl, target: ['production', 'preview', 'development'], type: 'plain' }),
+          }
+        );
+        console.log(`[Domain] Created NEXT_PUBLIC_SITE_URL = ${newSiteUrl}`);
       }
     } catch (envError) {
       console.error('Failed to update NEXT_PUBLIC_SITE_URL on Vercel:', envError);
@@ -289,42 +292,38 @@ export async function DELETE(req: NextRequest, { params }: RouteParams) {
       }
 
       // Update NEXT_PUBLIC_SITE_URL env var back to vercel.app URL
+      // Strategy: list first, then PATCH or POST — never rely on error response IDs
       if (vercelUrl) {
         try {
-          const envRes = await fetch(
-            `https://api.vercel.com/v10/projects/${project.vercelProjectId}/env`,
-            {
-              method: 'POST',
-              headers: {
-                Authorization: `Bearer ${VERCEL_TOKEN}`,
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                key: 'NEXT_PUBLIC_SITE_URL',
-                value: vercelUrl,
-                target: ['production', 'preview', 'development'],
-                type: 'plain',
-              }),
-            }
+          let existingEnvId: string | null = null;
+          const listRes = await fetch(
+            `https://api.vercel.com/v9/projects/${project.vercelProjectId}/env`,
+            { headers: { Authorization: `Bearer ${VERCEL_TOKEN}` } }
           );
-          if (!envRes.ok) {
-            const errData = await envRes.json();
-            if (errData.error?.code === 'ENV_ALREADY_EXISTS') {
-              const existingId = errData.error?.envVarId || errData.error?.id;
-              if (existingId) {
-                await fetch(
-                  `https://api.vercel.com/v9/projects/${project.vercelProjectId}/env/${existingId}`,
-                  {
-                    method: 'PATCH',
-                    headers: {
-                      Authorization: `Bearer ${VERCEL_TOKEN}`,
-                      'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ value: vercelUrl }),
-                  }
-                );
+          if (listRes.ok) {
+            const listData = await listRes.json();
+            const found = (listData.envs || []).find((e: { key?: string }) => e.key === 'NEXT_PUBLIC_SITE_URL');
+            if (found) existingEnvId = found.id;
+          }
+
+          if (existingEnvId) {
+            await fetch(
+              `https://api.vercel.com/v9/projects/${project.vercelProjectId}/env/${existingEnvId}`,
+              {
+                method: 'PATCH',
+                headers: { Authorization: `Bearer ${VERCEL_TOKEN}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ value: vercelUrl }),
               }
-            }
+            );
+          } else {
+            await fetch(
+              `https://api.vercel.com/v10/projects/${project.vercelProjectId}/env`,
+              {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${VERCEL_TOKEN}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ key: 'NEXT_PUBLIC_SITE_URL', value: vercelUrl, target: ['production', 'preview', 'development'], type: 'plain' }),
+              }
+            );
           }
         } catch (envError) {
           console.error('Failed to reset NEXT_PUBLIC_SITE_URL on Vercel:', envError);

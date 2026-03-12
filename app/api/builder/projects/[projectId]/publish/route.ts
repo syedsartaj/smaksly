@@ -303,6 +303,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     }
 
     // Set Vercel environment variables (needed for blog API calls at build time)
+    // Strategy: list existing env vars first, then PATCH existing or POST new ones
     if (vercelProjectId && VERCEL_TOKEN) {
       const siteUrl = predictedDeployUrl;
       const envVars = [
@@ -310,63 +311,64 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
         { key: 'NEXT_PUBLIC_PROJECT_ID', value: project._id.toString(), target: ['production', 'preview', 'development'], type: 'plain' },
         { key: 'NEXT_PUBLIC_SITE_URL', value: siteUrl, target: ['production', 'preview', 'development'], type: 'plain' },
       ];
+
+      // List all existing env vars upfront so we know which to PATCH vs POST
+      let existingEnvVars: Array<{ id: string; key: string; value?: string }> = [];
+      try {
+        const listRes = await fetch(
+          `https://api.vercel.com/v9/projects/${vercelProjectId}/env`,
+          { headers: { Authorization: `Bearer ${VERCEL_TOKEN}` } }
+        );
+        if (listRes.ok) {
+          const listData = await listRes.json();
+          existingEnvVars = listData.envs || [];
+        }
+      } catch (listErr) {
+        console.error('[Publish] Failed to list Vercel env vars:', listErr);
+      }
+
       for (const envVar of envVars) {
         try {
-          // Try to create; if it already exists, update it
-          const createRes = await fetch(
-            `https://api.vercel.com/v10/projects/${vercelProjectId}/env`,
-            {
-              method: 'POST',
-              headers: {
-                Authorization: `Bearer ${VERCEL_TOKEN}`,
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify(envVar),
-            }
-          );
-          if (!createRes.ok) {
-            const errData = await createRes.json();
-            // If env var already exists, patch it
-            if (errData.error?.code === 'ENV_ALREADY_EXISTS') {
-              let existingId = errData.error?.envVarId || errData.error?.id;
-              // Fallback: list env vars to find the ID if not returned in error
-              if (!existingId) {
-                try {
-                  const listRes = await fetch(
-                    `https://api.vercel.com/v9/projects/${vercelProjectId}/env`,
-                    { headers: { Authorization: `Bearer ${VERCEL_TOKEN}` } }
-                  );
-                  if (listRes.ok) {
-                    const listData = await listRes.json();
-                    const found = (listData.envs || []).find((e: { key?: string }) => e.key === envVar.key);
-                    if (found) existingId = found.id;
-                  }
-                } catch (listErr) {
-                  console.error(`Failed to list env vars for ${envVar.key}:`, listErr);
-                }
+          const existing = existingEnvVars.find((e) => e.key === envVar.key);
+          if (existing) {
+            // PATCH existing env var
+            const patchRes = await fetch(
+              `https://api.vercel.com/v9/projects/${vercelProjectId}/env/${existing.id}`,
+              {
+                method: 'PATCH',
+                headers: {
+                  Authorization: `Bearer ${VERCEL_TOKEN}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ value: envVar.value }),
               }
-              if (existingId) {
-                await fetch(
-                  `https://api.vercel.com/v9/projects/${vercelProjectId}/env/${existingId}`,
-                  {
-                    method: 'PATCH',
-                    headers: {
-                      Authorization: `Bearer ${VERCEL_TOKEN}`,
-                      'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ value: envVar.value }),
-                  }
-                );
-                console.log(`[Publish] Updated env var ${envVar.key} = ${envVar.value} (id: ${existingId})`);
-              } else {
-                console.warn(`[Publish] Could not find env var ID for ${envVar.key} to update`);
-              }
+            );
+            if (patchRes.ok) {
+              console.log(`[Publish] Updated env var ${envVar.key} = ${envVar.value}`);
+            } else {
+              console.error(`[Publish] Failed to PATCH env var ${envVar.key}:`, await patchRes.text());
             }
           } else {
-            console.log(`[Publish] Created env var ${envVar.key} = ${envVar.value}`);
+            // POST new env var
+            const createRes = await fetch(
+              `https://api.vercel.com/v10/projects/${vercelProjectId}/env`,
+              {
+                method: 'POST',
+                headers: {
+                  Authorization: `Bearer ${VERCEL_TOKEN}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(envVar),
+              }
+            );
+            if (createRes.ok) {
+              console.log(`[Publish] Created env var ${envVar.key} = ${envVar.value}`);
+            } else {
+              console.error(`[Publish] Failed to POST env var ${envVar.key}:`, await createRes.text());
+            }
           }
         } catch (envError) {
-          console.error(`Failed to set env var ${envVar.key}:`, envError);
+          console.error(`[Publish] Failed to set env var ${envVar.key}:`, envError);
         }
       }
     }
