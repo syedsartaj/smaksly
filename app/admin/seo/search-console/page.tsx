@@ -35,8 +35,7 @@ export default function SearchConsolePage() {
   const [expandedGuide, setExpandedGuide] = useState(true);
   const [copied, setCopied] = useState(false);
 
-  const serviceAccountEmail =
-    process.env.NEXT_PUBLIC_GOOGLE_CLIENT_EMAIL || 'your-service-account@project.iam.gserviceaccount.com';
+  const serviceAccountEmail = 'smaksly@smaksly.iam.gserviceaccount.com';
 
   const fetchWebsites = useCallback(async () => {
     setIsLoading(true);
