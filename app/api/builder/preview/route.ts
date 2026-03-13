@@ -472,6 +472,12 @@ function generatePreviewHTML(
     // Placeholder for useState hook (for client components)
     const { useState, useEffect, useCallback, useMemo, useRef } = React;
 
+    // Mock next/navigation hooks (not available in preview sandbox)
+    const usePathname = () => '/';
+    const useRouter = () => ({ push: () => {}, replace: () => {}, back: () => {}, forward: () => {}, refresh: () => {}, prefetch: () => {} });
+    const useSearchParams = () => new URLSearchParams();
+    const useParams = () => ({});
+
     // React Error Boundary for graceful component failure
     class ErrorBoundary extends React.Component {
       constructor(props) {
