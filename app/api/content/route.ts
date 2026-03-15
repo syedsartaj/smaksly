@@ -162,7 +162,7 @@ export async function POST(req: NextRequest) {
       featuredImage: body.featuredImage,
       metaTitle,
       metaDescription,
-      authorName: body.author || 'Admin',
+      authorName: body.authorName || body.author || 'Admin',
       keywordId: body.keywordId
         ? new mongoose.Types.ObjectId(body.keywordId)
         : undefined,
@@ -174,6 +174,9 @@ export async function POST(req: NextRequest) {
       categoryId: body.categoryId ? new mongoose.Types.ObjectId(body.categoryId) : undefined,
       tags: body.tags || [],
       isAiGenerated: body.isAiGenerated || false,
+      expiresAt: body.expiresAt ? new Date(body.expiresAt) : undefined,
+      scheduledAt: body.scheduledAt ? new Date(body.scheduledAt) : undefined,
+      schemaMarkup: body.schemaMarkup || undefined,
       wordCount,
       readingTime: Math.ceil(wordCount / 200),
     });

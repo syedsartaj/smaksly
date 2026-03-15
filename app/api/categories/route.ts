@@ -11,10 +11,23 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const tree = searchParams.get('tree') === 'true';
     const activeOnly = searchParams.get('activeOnly') !== 'false';
+    const websiteId = searchParams.get('websiteId');
+
+    // Build base query
+    const baseQuery: Record<string, unknown> = {};
+    if (activeOnly) baseQuery.isActive = true;
+    // Filter by website: show categories assigned to this website OR global (no websiteIds)
+    if (websiteId) {
+      baseQuery.$or = [
+        { websiteIds: websiteId },
+        { websiteIds: { $size: 0 } },
+        { websiteIds: { $exists: false } },
+      ];
+    }
 
     if (tree) {
       // Return hierarchical tree structure
-      const query = activeOnly ? { isActive: true } : {};
+      const query = baseQuery;
       const categories = await Category.find(query)
         .sort({ level: 1, displayOrder: 1, name: 1 })
         .lean();
@@ -67,8 +80,7 @@ export async function GET(req: NextRequest) {
     }
 
     // Return flat list
-    const query = activeOnly ? { isActive: true } : {};
-    const categories = await Category.find(query)
+    const categories = await Category.find(baseQuery)
       .sort({ level: 1, displayOrder: 1, name: 1 })
       .lean();
 
@@ -139,6 +151,7 @@ export async function POST(req: NextRequest) {
       path,
       metaTitle: body.metaTitle,
       metaDescription: body.metaDescription,
+      websiteIds: body.websiteIds || [],
       isActive: body.isActive !== false,
       displayOrder: body.displayOrder || 0,
     });

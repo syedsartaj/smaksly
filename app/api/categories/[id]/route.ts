@@ -133,6 +133,7 @@ export async function PUT(
           path,
           metaTitle: body.metaTitle !== undefined ? body.metaTitle : existingCategory.metaTitle,
           metaDescription: body.metaDescription !== undefined ? body.metaDescription : existingCategory.metaDescription,
+          websiteIds: body.websiteIds !== undefined ? body.websiteIds : (existingCategory as any).websiteIds || [],
           isActive: body.isActive !== undefined ? body.isActive : existingCategory.isActive,
           displayOrder: body.displayOrder !== undefined ? body.displayOrder : existingCategory.displayOrder,
         },

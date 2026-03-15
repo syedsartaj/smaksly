@@ -17,6 +17,13 @@ import {
   Wand2,
   BookOpen,
   Mail,
+  Globe,
+  FileText,
+  Bell,
+  AlertTriangle,
+  Clock,
+  PenLine,
+  FolderTree,
 } from 'lucide-react';
 
 const navigation = [
@@ -63,10 +70,30 @@ const navigation = [
     icon: Mail,
   },
   {
-    name: 'AI Blog Writer',
-    href: '/admin/ai-blog-writer',
-    icon: BookOpen,
-    badge: 'AI',
+    name: 'Posts',
+    href: '/admin/posts',
+    icon: PenLine,
+    children: [
+      { name: 'All Posts', href: '/admin/posts' },
+      { name: 'Write New', href: '/admin/posts/new' },
+      { name: 'Generate with AI', href: '/admin/posts/new?mode=ai' },
+      { name: 'Calendar', href: '/admin/posts/calendar' },
+    ],
+  },
+  {
+    name: 'Categories',
+    href: '/admin/categories',
+    icon: FolderTree,
+  },
+  {
+    name: 'Domains',
+    href: '/admin/domains',
+    icon: Globe,
+  },
+  {
+    name: 'Guest Posts',
+    href: '/admin/guest-posts',
+    icon: FileText,
   },
   {
     name: 'Settings',
@@ -86,6 +113,9 @@ export default function AdminLayout({
   const [hydrated, setHydrated] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [showNotifications, setShowNotifications] = useState(false);
 
   // Wait for Zustand to hydrate from localStorage
   useEffect(() => {
@@ -98,6 +128,37 @@ export default function AdminLayout({
       router.push('/login');
     }
   }, [hydrated, isAuthenticated, router]);
+
+  // Fetch notifications
+  useEffect(() => {
+    if (!hydrated || !isAuthenticated) return;
+    const fetchNotifications = async () => {
+      try {
+        const res = await fetch('/api/notifications');
+        if (res.ok) {
+          const data = await res.json();
+          setNotifications(data.notifications || []);
+          setUnreadCount(data.unreadCount || 0);
+        }
+      } catch {}
+    };
+    fetchNotifications();
+    const interval = setInterval(fetchNotifications, 60000);
+    return () => clearInterval(interval);
+  }, [hydrated, isAuthenticated]);
+
+  // Close notification dropdown on outside click
+  useEffect(() => {
+    if (!showNotifications) return;
+    const handleClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('[data-notification-dropdown]')) {
+        setShowNotifications(false);
+      }
+    };
+    document.addEventListener('click', handleClick);
+    return () => document.removeEventListener('click', handleClick);
+  }, [showNotifications]);
 
   const handleLogout = () => {
     logout();
@@ -260,6 +321,98 @@ export default function AdminLayout({
           isSidebarOpen ? 'ml-64' : 'ml-20'
         }`}
       >
+        {/* Top bar with notification bell */}
+        <div className="sticky top-0 z-40 flex items-center justify-end h-14 px-6 bg-zinc-950/80 backdrop-blur-sm border-b border-zinc-800/50">
+          <div className="relative" data-notification-dropdown>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowNotifications(!showNotifications);
+              }}
+              className="relative p-2 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800 transition-colors"
+            >
+              <Bell className="h-5 w-5" />
+              {unreadCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
+            </button>
+
+            {showNotifications && (
+              <div className="absolute right-0 top-full mt-2 w-96 bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800">
+                  <h3 className="text-sm font-semibold text-white">Notifications</h3>
+                  {unreadCount > 0 && (
+                    <span className="text-xs text-zinc-500">{unreadCount} unread</span>
+                  )}
+                </div>
+                <div className="max-h-80 overflow-y-auto">
+                  {notifications.length === 0 ? (
+                    <div className="px-4 py-8 text-center text-zinc-500 text-sm">
+                      No notifications
+                    </div>
+                  ) : (
+                    notifications.map((n) => (
+                      <Link
+                        key={n.id}
+                        href={
+                          n.type === 'domain_expiry'
+                            ? '/admin/domains'
+                            : '/admin/guest-posts'
+                        }
+                        onClick={() => setShowNotifications(false)}
+                        className={`flex items-start gap-3 px-4 py-3 hover:bg-zinc-800/50 transition-colors border-b border-zinc-800/50 ${
+                          !n.isRead ? 'bg-zinc-800/30' : ''
+                        }`}
+                      >
+                        <div className={`mt-0.5 p-1.5 rounded-lg shrink-0 ${
+                          n.severity === 'critical'
+                            ? 'bg-red-500/20 text-red-400'
+                            : n.severity === 'warning'
+                            ? 'bg-yellow-500/20 text-yellow-400'
+                            : 'bg-blue-500/20 text-blue-400'
+                        }`}>
+                          {n.severity === 'critical' ? (
+                            <AlertTriangle className="h-4 w-4" />
+                          ) : (
+                            <Clock className="h-4 w-4" />
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium text-white truncate">{n.title}</p>
+                          <p className="text-xs text-zinc-400 mt-0.5">{n.message}</p>
+                        </div>
+                        {!n.isRead && (
+                          <div className="mt-2 h-2 w-2 rounded-full bg-emerald-400 shrink-0" />
+                        )}
+                      </Link>
+                    ))
+                  )}
+                </div>
+                {notifications.length > 0 && (
+                  <div className="px-4 py-2 border-t border-zinc-800 flex justify-between">
+                    <Link
+                      href="/admin/domains"
+                      onClick={() => setShowNotifications(false)}
+                      className="text-xs text-emerald-400 hover:text-emerald-300"
+                    >
+                      View Domains
+                    </Link>
+                    <Link
+                      href="/admin/guest-posts"
+                      onClick={() => setShowNotifications(false)}
+                      className="text-xs text-emerald-400 hover:text-emerald-300"
+                    >
+                      View Guest Posts
+                    </Link>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
         {children}
       </main>
     </div>

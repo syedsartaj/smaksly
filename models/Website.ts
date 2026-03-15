@@ -65,6 +65,10 @@ export interface IWebsite extends Document {
     blogLayout: string;
   };
 
+  // Domain Info
+  domainProvider?: string;
+  domainExpiryDate?: Date;
+
   // Metadata
   country: string;
   language: string;
@@ -173,6 +177,10 @@ const WebsiteSchema = new Schema<IWebsite>(
       fontFamily: { type: String, default: 'Inter' },
       blogLayout: { type: String, default: 'BlogLayout1' },
     },
+
+    // Domain Info
+    domainProvider: { type: String, trim: true },
+    domainExpiryDate: { type: Date },
 
     // Metadata
     country: { type: String, default: 'US', index: true },

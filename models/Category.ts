@@ -17,6 +17,9 @@ export interface ICategory extends Document {
   metaTitle?: string;
   metaDescription?: string;
 
+  // Website Assignment (empty = available to all websites)
+  websiteIds: mongoose.Types.ObjectId[];
+
   // Stats
   websiteCount: number;
   keywordCount: number;
@@ -83,6 +86,12 @@ const CategorySchema = new Schema<ICategory>(
       maxlength: [160, 'Meta description cannot exceed 160 characters'],
     },
 
+    // Website Assignment
+    websiteIds: [{
+      type: Schema.Types.ObjectId,
+      ref: 'Website',
+    }],
+
     // Stats
     websiteCount: { type: Number, default: 0 },
     keywordCount: { type: Number, default: 0 },
@@ -100,6 +109,7 @@ const CategorySchema = new Schema<ICategory>(
 // Indexes
 CategorySchema.index({ parentId: 1, displayOrder: 1 });
 CategorySchema.index({ isActive: 1, level: 1 });
+CategorySchema.index({ websiteIds: 1 });
 
 // Pre-save hook to update path
 CategorySchema.pre('save', async function (next) {
