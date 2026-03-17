@@ -725,6 +725,41 @@ export default function RootLayout({
   const projectLanguages = settings.languages || [];
   const isMultiLang = projectLanguages.length > 1;
 
+  // Known Lucide icon names for auto-detection
+  const LUCIDE_ICONS = new Set([
+    'Activity','AlertCircle','AlertTriangle','ArrowDown','ArrowLeft','ArrowRight','ArrowUp',
+    'Award','BarChart','Bell','Bold','BookOpen','Calendar','Check','CheckCircle','ChevronDown',
+    'ChevronLeft','ChevronRight','ChevronUp','Circle','Clock','Cloud','Code','Code2','Copy',
+    'DollarSign','Download','Edit','ExternalLink','Eye','Facebook','File','FileText','Filter',
+    'FolderOpen','Globe','Grid','Hash','Heart','Home','Image','Info','Instagram','Italic',
+    'Key','Layers','Layout','Link','Linkedin','List','Loader2','Lock','LogOut','Mail','Map',
+    'MapPin','Menu','MessageCircle','MessageSquare','Minus','Monitor','Moon','MoreHorizontal',
+    'MoreVertical','Move','Music','Newspaper','PenTool','Phone','Play','Plus','RefreshCw',
+    'Search','Send','Settings','Share','Share2','Shield','ShieldCheck','ShoppingCart','Smartphone',
+    'Star','Sun','Tag','ThumbsUp','Trash','TrendingUp','Twitter','Type','Upload','User','Users',
+    'Video','X','Youtube','Zap',
+  ]);
+
+  // Auto-detect Lucide icons in code and add import
+  function ensureLucideImport(code: string): string {
+    if (code.includes("from 'lucide-react'") || code.includes('from "lucide-react"')) return code;
+    const usedIcons: string[] = [];
+    for (const icon of LUCIDE_ICONS) {
+      // Match JSX usage: <IconName or as prop value
+      const regex = new RegExp(`<${icon}[\\s/>]|\\{${icon}\\}`, 'g');
+      if (regex.test(code)) usedIcons.push(icon);
+    }
+    if (usedIcons.length === 0) return code;
+    const importLine = `import { ${usedIcons.sort().join(', ')} } from 'lucide-react';\n`;
+    // Insert after 'use client' and React import, or at top
+    if (code.includes("import React")) {
+      return code.replace(/(import React[^\n]*\n)/, `$1${importLine}`);
+    } else if (code.includes("'use client'")) {
+      return code.replace(/('use client';?\s*\n)/, `$1${importLine}`);
+    }
+    return importLine + code;
+  }
+
   // Helper to write a page file with optional per-page metadata
   async function writePageFile(page: Record<string, unknown>, targetDir: string) {
     let pagePath = page.path as string;
@@ -768,6 +803,14 @@ export default function RootLayout({
       if (!clientCode.trimStart().startsWith("'use client'") && !clientCode.trimStart().startsWith('"use client"')) {
         clientCode = "'use client';\n\n" + clientCode;
       }
+      // Ensure React is imported if code uses React.xxx
+      if (clientCode.includes('React.') && !clientCode.includes('import React')) {
+        clientCode = clientCode.replace(
+          /^('use client';?\s*\n)/,
+          "$1import React from 'react';\n"
+        );
+      }
+      clientCode = ensureLucideImport(clientCode);
       await fs.writeFile(path.join(dirPath, 'BlogListingClient.tsx'), clientCode);
 
       // Build per-page metadata lines
@@ -782,7 +825,8 @@ export default function RootLayout({
       // Create server page.tsx that fetches blog data and passes to client
       let serverPage: string;
       if (isMultiLang) {
-        serverPage = `import { getBlogs } from '@/lib/api';
+        serverPage = `import React from 'react';
+import { getBlogs } from '@/lib/api';
 import type { Metadata } from 'next';
 import _BlogListingClient from './BlogListingClient';
 const BlogListingClient = _BlogListingClient as any;
@@ -795,7 +839,8 @@ export default async function BlogListingPage({ params }: { params: { lang: stri
 }
 `;
       } else {
-        serverPage = `import { getBlogs } from '@/lib/api';
+        serverPage = `import React from 'react';
+import { getBlogs } from '@/lib/api';
 import type { Metadata } from 'next';
 import _BlogListingClient from './BlogListingClient';
 const BlogListingClient = _BlogListingClient as any;
@@ -818,6 +863,13 @@ export default async function BlogListingPage() {
       let clientCode = pageCode;
       if (!clientCode.trimStart().startsWith("'use client'") && !clientCode.trimStart().startsWith('"use client"')) {
         clientCode = "'use client';\n\n" + clientCode;
+      }
+      // Ensure React is imported if code uses React.xxx
+      if (clientCode.includes('React.') && !clientCode.includes('import React')) {
+        clientCode = clientCode.replace(
+          /^('use client';?\s*\n)/,
+          "$1import React from 'react';\n"
+        );
       }
       // Fix common AI-generated type issues for blog-post client components:
       // 1. Fix `blog = {}` or `blog = {} as X` patterns that cause TS errors
@@ -846,12 +898,14 @@ export default async function BlogListingPage() {
           '$1\n  if (!blog) return <div className="text-center py-20"><p>Post not found</p></div>;'
         );
       }
+      clientCode = ensureLucideImport(clientCode);
       await fs.writeFile(path.join(dirPath, 'BlogPostClient.tsx'), clientCode);
 
       // Create server page.tsx with dynamic slug extraction and metadata
       let serverPage: string;
       if (isMultiLang) {
-        serverPage = `import { getBlogBySlug, getBlogs } from '@/lib/api';
+        serverPage = `import React from 'react';
+import { getBlogBySlug, getBlogs } from '@/lib/api';
 import type { Metadata } from 'next';
 import _BlogPostClient from './BlogPostClient';
 const BlogPostClient = _BlogPostClient as any;
@@ -882,7 +936,8 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
 }
 `;
       } else {
-        serverPage = `import { getBlogBySlug, getBlogs } from '@/lib/api';
+        serverPage = `import React from 'react';
+import { getBlogBySlug, getBlogs } from '@/lib/api';
 import type { Metadata } from 'next';
 import _BlogPostClient from './BlogPostClient';
 const BlogPostClient = _BlogPostClient as any;
@@ -929,7 +984,7 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
         if (page.ogImage) {
           pageMetaLines.push(`  openGraph: { images: ['${page.ogImage}'] },`);
         }
-        const pageLayoutCode = `import type { Metadata } from 'next';\n\nexport const metadata: Metadata = {\n${pageMetaLines.join('\n')}\n};\n\nexport default function PageLayout({ children }: { children: React.ReactNode }) {\n  return <>{children}</>;\n}\n`;
+        const pageLayoutCode = `import React from 'react';\nimport type { Metadata } from 'next';\n\nexport const metadata: Metadata = {\n${pageMetaLines.join('\n')}\n};\n\nexport default function PageLayout({ children }: { children: React.ReactNode }) {\n  return <>{children}</>;\n}\n`;
         await fs.writeFile(path.join(dirPath, 'layout.tsx'), pageLayoutCode);
       } else {
         const pageMetaLines: string[] = [];
@@ -940,6 +995,21 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
         }
         const metaExport = `import type { Metadata } from 'next';\n\nexport const metadata: Metadata = {\n${pageMetaLines.join('\n')}\n};\n\n`;
         pageCode = metaExport + pageCode;
+      }
+    }
+
+    // Ensure Lucide imports
+    pageCode = ensureLucideImport(pageCode);
+
+    // Ensure React import for any page using React.xxx
+    if (pageCode.includes('React.') && !pageCode.includes('import React')) {
+      if (pageCode.trimStart().startsWith("'use client'") || pageCode.trimStart().startsWith('"use client"')) {
+        pageCode = pageCode.replace(
+          /^(['"]use client['"];?\s*\n)/,
+          "$1import React from 'react';\n"
+        );
+      } else {
+        pageCode = "import React from 'react';\n" + pageCode;
       }
     }
 
@@ -1053,6 +1123,22 @@ export default function LangLayout({
 
     let code = component.code as string;
     const name = component.name as string;
+
+    // Ensure 'use client' for components with hooks/state
+    if ((code.includes('useState') || code.includes('useEffect') || code.includes('useRef')) &&
+        !code.trimStart().startsWith("'use client'") && !code.trimStart().startsWith('"use client"')) {
+      code = "'use client';\n\n" + code;
+    }
+    // Ensure React import
+    if (code.includes('React.') && !code.includes('import React')) {
+      if (code.trimStart().startsWith("'use client'") || code.trimStart().startsWith('"use client"')) {
+        code = code.replace(/^(['"]use client['"];?\s*\n)/, "$1import React from 'react';\n");
+      } else {
+        code = "import React from 'react';\n" + code;
+      }
+    }
+    // Ensure Lucide imports
+    code = ensureLucideImport(code);
 
     const componentPath = path.join(projectPath, 'components', `${name}.tsx`);
     await fs.writeFile(componentPath, code);
