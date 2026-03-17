@@ -38,6 +38,7 @@ const navigation = [
     icon: Search,
     children: [
       { name: 'Overview', href: '/admin/seo' },
+      { name: 'Page Coverage', href: '/admin/seo/coverage' },
       { name: 'Search Console', href: '/admin/seo/search-console' },
       { name: 'Analytics', href: '/admin/seo/analytics' },
       { name: 'AI Fixer', href: '/admin/seo/fixer' },
