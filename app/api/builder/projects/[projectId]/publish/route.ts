@@ -810,6 +810,20 @@ export default function RootLayout({
           "$1import React from 'react';\n"
         );
       }
+      // Ensure component accepts `blogs` prop from server page
+      // Case 1: function BlogListing() — no params
+      clientCode = clientCode.replace(
+        /export\s+default\s+function\s+(\w+)\s*\(\s*\)\s*\{/,
+        'export default function $1({ blogs: serverBlogs, blogBasePath }: { blogs?: any[]; blogBasePath?: string }) {'
+      );
+      // Case 2: already has params but no blogs
+      if (!clientCode.includes('serverBlogs') && !clientCode.includes('{ blogs')) {
+        clientCode = clientCode.replace(
+          /export\s+default\s+function\s+(\w+)\s*\(\s*\{([^}]*)\}\s*(?::\s*[^{]*?)?\)\s*\{/,
+          'export default function $1({ blogs: serverBlogs, blogBasePath, $2 }: { blogs?: any[]; blogBasePath?: string; [key: string]: any }) {'
+        );
+      }
+
       clientCode = ensureLucideImport(clientCode);
       await fs.writeFile(path.join(dirPath, 'BlogListingClient.tsx'), clientCode);
 
@@ -871,31 +885,32 @@ export default async function BlogListingPage() {
           "$1import React from 'react';\n"
         );
       }
-      // Fix common AI-generated type issues for blog-post client components:
-      // 1. Fix `blog = {}` or `blog = {} as X` patterns that cause TS errors
-      clientCode = clientCode
-        .replace(/\{\s*blog\s*=\s*\{\}\s*as\s*\w+\s*/g, '{ blog ')
-        .replace(/\{\s*blog\s*=\s*\{\}\s*/g, '{ blog ');
-
-      // 2. Ensure the function signature has proper typing for `blog` prop
-      //    Match patterns like `function BlogPost({ blog, ...` or `function BlogPost({ blog })`
-      //    and add `: { blog: any; [key: string]: any }` if no type annotation exists
-      if (!clientCode.match(/\}\s*:\s*\w+/)) {
-        // No type annotation on destructured props — add one
+      // Fix blog-post client component to accept `blog` prop from server page
+      // Case 1: function BlogPost() — no params at all → add { blog }: { blog: any }
+      clientCode = clientCode.replace(
+        /export\s+default\s+function\s+(\w+)\s*\(\s*\)\s*\{/,
+        'export default function $1({ blog, blogBasePath }: { blog: any; blogBasePath?: string }) {'
+      );
+      // Case 2: function BlogPost({ ... }) — has params but no blog → add blog
+      if (!clientCode.includes('{ blog') && !clientCode.includes('{blog')) {
         clientCode = clientCode.replace(
-          /export\s+default\s+function\s+\w+\s*\(\s*\{([^}]*)\}\s*\)\s*\{/,
-          (match, params) => {
-            return match.replace(`{${params}}`, `{${params}}: { blog: any; blogBasePath?: string; [key: string]: any }`);
-          }
+          /export\s+default\s+function\s+(\w+)\s*\(\s*\{([^}]*)\}\s*(?::\s*[^{]*?)?\)\s*\{/,
+          'export default function $1({ blog, blogBasePath, $2 }: { blog: any; blogBasePath?: string; [key: string]: any }) {'
+        );
+      }
+      // Case 3: already has { blog } but no type annotation → add type
+      if (clientCode.match(/\{\s*blog[\s,}]/) && !clientCode.match(/\}\s*:\s*\{/)) {
+        clientCode = clientCode.replace(
+          /export\s+default\s+function\s+(\w+)\s*\(\s*\{([^}]*)\}\s*\)\s*\{/,
+          'export default function $1({ $2 }: { blog: any; blogBasePath?: string; [key: string]: any }) {'
         );
       }
 
-      // 3. Ensure there's a null guard for blog property access
-      if (!clientCode.includes('!blog ||') && !clientCode.includes('!blog||') && !clientCode.includes('!blog)')) {
-        // Add null guard at the top of the component body if blog is accessed without checks
+      // Add null guard for blog
+      if (!clientCode.includes('!blog)') && !clientCode.includes('!blog ||') && !clientCode.includes('!blog|')) {
         clientCode = clientCode.replace(
           /(export\s+default\s+function\s+\w+\s*\([^)]*\)\s*\{)/,
-          '$1\n  if (!blog) return <div className="text-center py-20"><p>Post not found</p></div>;'
+          '$1\n  if (!blog) return <div className="text-center py-20"><p>Loading...</p></div>;'
         );
       }
       clientCode = ensureLucideImport(clientCode);
@@ -1229,7 +1244,7 @@ export async function getBlogs(page = 1, limit = 12): Promise<{
 }> {
   try {
     const res = await fetch(
-      \`\${SMAKSLY_API}/api/builder/blogs?projectId=\${PROJECT_ID}&page=\${page}&limit=\${limit}&skipDummy=true\`,
+      \`\${SMAKSLY_API}/api/builder/blogs?projectId=\${PROJECT_ID}&page=\${page}&limit=\${limit}\`,
       { next: { revalidate: 60 } }
     );
 
@@ -1306,7 +1321,7 @@ export async function getAllBlogsForSitemap(): Promise<BlogPost[]> {
   try {
     while (true) {
       const res = await fetch(
-        \`\${SMAKSLY_API}/api/builder/blogs?projectId=\${PROJECT_ID}&page=\${page}&limit=\${limit}&skipDummy=true\`,
+        \`\${SMAKSLY_API}/api/builder/blogs?projectId=\${PROJECT_ID}&page=\${page}&limit=\${limit}\`,
         { next: { revalidate: 60 } }
       );
 
